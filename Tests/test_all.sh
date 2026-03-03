@@ -21,20 +21,17 @@ for file in "$TARGET_DIR"/*.mr; do
     ((total++))
     filename="${file%.mr}"
     
-    echo "=================================="
-    echo "File: $file"
-    echo "=================================="
-    
-    echo "Compiling..."
+    echo -e "\e[1;37mCompilation ${file%.mr}\e[0m"
+
     if marblec "$file"; then
-        echo "TEST $file"
-        
+        echo -e "\e[1;33mTEST $file\e[0m"
+
         if [ -f "./$filename" ]; then
             "./$filename"
             status=$?
             
             if [ $status -eq 0 ]; then
-                echo "TEST $file WAS SUCCESSFUL"
+                echo -e "\e[1;32mWAS SUCCESSFUL\e[0m"
                 ((success++))
             else
                 echo "Program exited with code $status"
@@ -42,30 +39,30 @@ for file in "$TARGET_DIR"/*.mr; do
             fi
             
             rm "./$filename"
-            echo "Removed $filename"
+            echo -e "\e[1;33mRemoved $filename\e[0m"
         else
-            echo "Error: executable file $filename not found"
+            echo -e "\e[1;31mError: executable file $filename not found\e[0m"
             ((failed++))
         fi
     else
-        echo "Compilation error for $file"
+        echo -e "\e[1;31mCompilation error for $file\e[0m"
         ((failed++))
     fi
     
     echo ""
 done
 
-echo "=================================="
-echo "Statistics:"
-echo "Total files: $total"
-echo "Successful: $success"
-echo "Failed: $failed"
-echo "=================================="
+echo -e "=================================="
+echo -e "\e[1;37mStatistics:"
+echo -e "Total files: $total\e[0m"
+echo -e "\e[1;32mSuccessful: $success\e[0m"
+echo -e "\e[1;31mFailed: $failed\e[0m"
+echo -e "=================================="
 
 if [ $failed -eq 0 ]; then
-    echo "All tests passed successfully!"
+    echo -e "\e[1;32mAll tests passed successfully!\e[0m"
     exit 0
 else
-    echo "Errors detected"
+    echo -e "\e[1;31mErrors detected\e[0m"
     exit 1
 fi

@@ -1177,6 +1177,8 @@ namespace marble {
             }
             else if (auto it = mod->Structures.find(fae->GetName()); it != mod->Structures.end()) {
                 auto val = ASTVal(ASTType(ASTTypeKind::Struct, fae->GetName(), false, 0, it->second.Parent), ASTValData { .i32Val = 0 }, false, false, true);
+                val.GetType().SetModule(mod);
+                val.SetModule(mod);
                 return val;
             }
             else if (auto it = mod->Imports.find(fae->GetName()); it != mod->Imports.end()) {
