@@ -1,0 +1,7 @@
+import TestLang.Example;
+
+fun main(): i32 {
+    var s: TestLang.Example.Inner.PublicStruct;
+    echo s.field; echo '\n'; // 10
+    return 0;
+}

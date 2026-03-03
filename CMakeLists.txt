@@ -49,6 +49,9 @@ add_subdirectory(Src/Sema)
 add_subdirectory(Src/CodeGen)
 add_subdirectory(Src/Compilation)
 
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/Libs
+    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/)
+
 add_definitions(-w)
 add_executable(${PROJECT_NAME} Src/Main.cpp)
 
