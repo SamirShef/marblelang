@@ -2,6 +2,7 @@
 #include <marble/AST/Argument.h>
 #include <marble/AST/Stmt.h>
 #include <marble/Basic/ASTType.h>
+#include <llvm/ADT/StringRef.h>
 #include <vector>
 
 namespace marble {
@@ -11,7 +12,7 @@ namespace marble {
         std::vector<Argument> _args;
         std::vector<Stmt *> _block;
         bool _isDeclaration;
-        bool _isStatic;
+        bool _isStatic = false;
 
     public:
         explicit FunDeclStmt(std::string name, ASTType retType, std::vector<Argument> args, std::vector<Stmt *> block, bool isDeclaration, bool isStatic, AccessModifier access,
@@ -29,14 +30,9 @@ namespace marble {
             return _name;
         }
 
-        ASTType
-        GetRetType() const {
+        ASTType &
+        GetRetType() {
             return _retType;
-        }
-
-        void
-        SetRetType(ASTType type) {
-            _retType = type;
         }
 
         std::vector<Argument> &

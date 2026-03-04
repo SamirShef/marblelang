@@ -1,0 +1,9 @@
+struct Test {
+    pub static var field: i32;
+}
+
+fun main(): i32 {
+    var t: Test;
+    echo t.field; echo '\n';
+    return 0;
+}

@@ -4,8 +4,7 @@ project(marblec)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-add_compile_options(-w)
-add_compile_options(-g)
+add_compile_options(-w -g)
 
 include_directories(Include)
 
@@ -50,10 +49,11 @@ add_subdirectory(Src/Sema)
 add_subdirectory(Src/CodeGen)
 add_subdirectory(Src/Compilation)
 
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/Libs
+    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/)
+
 add_definitions(-w)
 add_executable(${PROJECT_NAME} Src/Main.cpp)
-
-file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/Libs/" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/Libs/")
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${LLVM_INCLUDE_DIRS}include)
 target_compile_definitions(${PROJECT_NAME} PRIVATE ${LLVM_DEFINITIONS})

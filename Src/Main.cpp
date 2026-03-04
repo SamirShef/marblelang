@@ -1,3 +1,7 @@
+#include <filesystem>
+#include <llvm/IR/Verifier.h>
+#include <llvm/Support/raw_ostream.h>
+#include <marble/Basic/Module.h>
 #include <marble/Basic/ModuleManager.h>
 #include <marble/AST/Printer.h>
 #include <marble/CodeGen/CodeGen.h>
@@ -11,8 +15,6 @@
 #include <llvm/Support/Path.h>
 #include <llvm/TargetParser/Host.h>
 
-std::string libsPath = "Libs/";
-
 int
 main(int argc, char **argv) {
     if (argc < 2) {
@@ -24,69 +26,70 @@ main(int argc, char **argv) {
     llvm::cl::ParseCommandLineOptions(argc, argv, "Marble Compiler\n");
     llvm::outs().SetUnbuffered();
 
-    llvm::SourceMgr srcMgr;
     std::string fileName = marble::InputFilename;
 
-    auto bufferOrErr = llvm::MemoryBuffer::getFile(fileName);
-    
-    if (std::error_code ec = bufferOrErr.getError()) {
-        llvm::errs() << llvm::errs().RED << "Could not open file " << llvm::errs().RESET << '`' << fileName << "`: " << ec.message() << '\n';
-        return 1;
-    }
-    srcMgr.AddNewSourceBuffer(std::move(*bufferOrErr), llvm::SMLoc());
-
+    llvm::SourceMgr srcMgr;
     marble::DiagnosticEngine diag(srcMgr);
-    marble::ModuleManager modManager(diag);
-    marble::Module *mainMod = modManager.LoadModule(fileName, marble::AccessPriv, srcMgr);
-    if (diag.HasErrors()) {
+    marble::Module *root = marble::ModuleManager::LoadModule(fileName, srcMgr, diag);
+    if (!root) {
+        llvm::errs() << llvm::errs().RED << "Could not open file: file not found" << llvm::errs().RESET << '\n';
         return 1;
     }
-    diag.ResetErrors();
 
     if (marble::EmitAction == marble::EmitAST) {
         marble::ASTPrinter printer;
-        for (auto stmt : mainMod->AST) {
+        for (auto stmt : root->AST) {
             printer.Visit(stmt);
             llvm::outs() << '\n';
         }
         return 0; 
     }
 
-    marble::SemanticAnalyzer sema(diag, srcMgr, libsPath, modManager);
-    sema.Analyze(mainMod);
+    std::string absoluteFileName = std::filesystem::absolute(fileName);
+    std::string parentDir = absoluteFileName.substr(0, absoluteFileName.find_last_of("/\\"));
+    marble::SemanticAnalyzer sema(parentDir, srcMgr, diag, root);
+    sema.AnalyzeModule(root, true);
+
+    if (root->Functions.find("main") == root->Functions.end()) {
+        diag.Report(llvm::SMLoc::getFromPointer(srcMgr.getMemoryBuffer(srcMgr.getMainFileID())->getBufferStart()), marble::ErrDoesNotHaveMain);
+    }
+
     if (diag.HasErrors()) {
         return 1;
     }
     diag.ResetErrors();
 
-    marble::CodeGen codegen(mainMod, srcMgr);
-    codegen.DeclareRuntimeFunctions();
-    codegen.DeclareMod(mainMod);
-    codegen.GenerateBodies(mainMod);
-
-    llvm::Module *mod = codegen.GetLLVMModule();
+    marble::CodeGen codegen(parentDir, fileName, srcMgr, diag);
+    codegen.DeclareMod(root);
+    for (auto &stmt : root->AST) {
+        codegen.Visit(stmt);
+    }
+    if (diag.HasErrors()) {
+        return 1;
+    }
+    std::unique_ptr<llvm::Module> mod = codegen.GetModule();
     marble::InitializeLLVMTargets();
     
     std::string tripleStr = llvm::sys::getDefaultTargetTriple();
     llvm::Triple triple(tripleStr);
-    llvm::StringRef stem = llvm::sys::path::stem(fileName);
+    int last_dot_pos = fileName.find_last_of('.');
+    if (last_dot_pos != std::string::npos && last_dot_pos != 0) { 
+        fileName.erase(last_dot_pos);
+    }
     std::string outputName;
     if (!marble::OutputFilename.empty()) {
         outputName = marble::OutputFilename;
     }
     else {
         switch (marble::EmitAction) {
-            case marble::EmitAST:
-                outputName = "";
-                break;
             case marble::EmitLLVM:
-                outputName = (stem + ".ll").str();
+                outputName = fileName + ".ll";
                 break;
             case marble::EmitObj:
-                outputName = (stem + ".o").str();
+                outputName = fileName + ".o";
                 break;
             case marble::EmitBinary: 
-                outputName = stem.str();
+                outputName = fileName;
                 if (triple.isOSWindows()) {
                     outputName += ".exe";
                 }
@@ -125,15 +128,14 @@ main(int argc, char **argv) {
         return 0;
     }
     
-    std::string objFile = (marble::EmitAction == marble::EmitObj) ? outputName : (stem + ".o").str();
-    if (!marble::EmitObjectFile(&*mod, objFile, tripleStr)) {
+    std::string objFile = (marble::EmitAction == marble::EmitObj) ? outputName : fileName + ".o";
+    if (!marble::EmitObjectFile(mod.get(), objFile, tripleStr)) {
         return 1;
     }
     if (marble::EmitAction == marble::EmitBinary) {
-        marble::LinkObjectFile(objFile, marble::GetOutputName(fileName, triple));
+        marble::LinkObjectFile(objFile, outputName);
         llvm::sys::fs::remove(objFile); // NOLINT
     }
     llvm::outs().flush();   // explicitly flushing the buffer
-    
     return 0;
 }

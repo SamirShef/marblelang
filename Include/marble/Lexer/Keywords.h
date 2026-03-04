@@ -31,8 +31,8 @@ namespace marble {
         { "nil", TkNil },
         { "new", TkNew },
         { "del", TkDel },
-        { "import", TkImport },
         { "mod", TkMod },
+        { "import", TkImport },
         { "static", TkStatic },
     };
 }

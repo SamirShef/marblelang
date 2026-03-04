@@ -1,0 +1,16 @@
+pub var publicVar: i32 = 10;
+var privateVar: i32;
+
+pub fun publicFun(): i32 {
+    return 10;
+}
+
+fun privateFun(): i32 {
+    return 0;
+}
+
+mod Inner {
+    pub struct PublicStruct {
+        pub var field: i32 = 10;
+    }
+}

@@ -31,14 +31,9 @@ namespace marble {
             return _isConst;
         }
 
-        ASTType
-        GetType() const {
+        ASTType &
+        GetType() {
             return _type;
-        }
-
-        void
-        SetType(ASTType type) {
-            _type = type;
         }
         
         Expr *

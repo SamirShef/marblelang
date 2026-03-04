@@ -1,5 +1,5 @@
 #pragma once
-#include <marble/Basic/ModuleManager.h>
+#include <marble/Basic/Module.h>
 #include <marble/AST/AST.h>
 #include <marble/AST/Visitor.h>
 #include <marble/Basic/DiagnosticEngine.h>
@@ -9,26 +9,28 @@
 
 namespace marble {
     class SemanticAnalyzer : public ASTVisitor<SemanticAnalyzer, std::optional<ASTVal>> {
-        DiagnosticEngine &_diag;
+        std::string _parentDir;
         llvm::SourceMgr &_srcMgr;
-        ModuleManager &_modManager;
-        Module *_rootMod = nullptr;
-        Module *_currentMod = nullptr;
-        const std::string &_libsPath;
-        
+        DiagnosticEngine &_diag;
+        Module *_curMod;
+
         std::stack<std::unordered_map<std::string, Variable>> _vars;
 
         std::stack<ASTType> _funRetsTypes;
+
         int _loopDeth = 0;
         
     public:
-        explicit SemanticAnalyzer(DiagnosticEngine &diag, llvm::SourceMgr &srcMgr, const std::string &libsPath, ModuleManager &mm)
-                                : _diag(diag), _srcMgr(srcMgr), _libsPath(libsPath), _modManager(mm) {
+        explicit SemanticAnalyzer(std::string parentDir, llvm::SourceMgr &srcMgr, DiagnosticEngine &diag, Module *root) : _parentDir(parentDir), _srcMgr(srcMgr), _diag(diag),
+                                                                                                                          _curMod(root) {
             _vars.push({});
         }
-        
+
         void
-        Analyze(Module *mod);
+        AnalyzeModule(Module *mod, bool isRoot = false);
+
+        void
+        DeclareInModule(Module *mod);
 
         std::optional<ASTVal>
         VisitVarDeclStmt(VarDeclStmt *vds);
@@ -82,7 +84,7 @@ namespace marble {
         VisitImportStmt(ImportStmt *is);
 
         std::optional<ASTVal>
-        VisitModuleDeclStmt(ModuleDeclStmt *mds);
+        VisitModDeclStmt(ModDeclStmt *mds);
 
         std::optional<ASTVal>
         VisitBinaryExpr(BinaryExpr *be);
@@ -121,26 +123,8 @@ namespace marble {
         VisitNewExpr(NewExpr *ne);
 
     private:
-        void
-        resolveTypeInStatement(Stmt *stmt, Module *mod);
-
-        void
-        discover(Module *mod);
-
-        bool
-        inRootMod(const Module *mod);
-
-        Variable *
-        findVar(std::string name);
-
-        Function *
-        findFunction(std::string name);
-        
-        Struct *
-        findStruct(std::string name);
-
-        Trait *
-        findTrait(std::string name);
+        ASTType
+        resolveType(ASTType &type, llvm::SMLoc startLoc, llvm::SMLoc endLoc);
 
         llvm::SMRange
         getRange(llvm::SMLoc start, int len) const;
@@ -152,24 +136,9 @@ namespace marble {
         variableExists(std::string name) const;
 
         bool
-        canImplicitlyCast(ASTVal src, ASTType expectType);
+        canImplicitlyCast(ASTVal src, ASTType expectType, llvm::SMLoc startLoc, llvm::SMLoc endLoc);
         
         ASTVal
         implicitlyCast(ASTVal src, ASTType expectType, llvm::SMLoc startLoc, llvm::SMLoc endLoc);
-
-        std::vector<std::string>
-        splitPath(const std::string &path);
-
-        Struct *
-        findStructByPath(const std::string &path, Module *contextMod = nullptr);
-        
-        Trait *
-        findTraitByPath(const std::string &path, Module *contextMod = nullptr);
-        
-        ASTType
-        resolveType(ASTType type, Module *contextMod);
-
-        Module *
-        createModule(Module *base, std::string name, std::string fullPath, AccessModifier access, std::vector<Stmt *> ast);
     };
 }

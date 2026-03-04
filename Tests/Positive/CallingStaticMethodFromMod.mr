@@ -1,0 +1,12 @@
+struct Test {}
+
+impl Test {
+    pub static fun method(): i32 {
+        return 0;
+    }
+}
+
+fun main(): i32 {
+    echo Test.method(); echo '\n'; // 0
+    return 0;
+}

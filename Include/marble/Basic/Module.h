@@ -1,95 +1,104 @@
-#include <marble/AST/Statements/FunDeclStmt.h>
-#include <marble/AST/Statements/StructStmt.h>
-#include <marble/AST/Statements/ImplStmt.h>
-#include <marble/AST/Statements/TraitDeclStmt.h>
-#include <marble/Basic/ASTVal.h>
-#include <llvm/IR/Module.h>
-#include <string>
+#pragma once
+#include <marble/Basic/Symbols.h>
+#include <marble/AST/Stmt.h>
 #include <unordered_map>
+#include <string>
 #include <vector>
 
 namespace marble {
-    struct Variable {
-        std::string Name;
-        ASTType Type;
-        std::optional<ASTVal> Val;
-        bool IsConst;
-        AccessModifier Access;
-    };
-    
-    struct Function {
-        std::string Name;
-        ASTType RetType;
-        std::vector<Argument> Args;
-        std::vector<Stmt *> Body;
-        bool IsDeclaration;
-        AccessModifier Access;
-    };
-
-    struct Field {
-        std::string Name;
-        std::optional<ASTVal> Val;
-        ASTType Type;
-        bool IsConst;
-        AccessModifier Access;
-        bool ManualInitialized;
-        bool IsStatic;
-    };
-    
-    struct Method {
-        Function Fun;
-        AccessModifier Access;
-        bool IsStatic;
-    };
-
-    struct Trait {
-        std::string Name;
-        std::unordered_map<std::string, Method> Methods;
-        AccessModifier Access;
-    };
-
-    struct Struct {
-        std::string Name;
-        std::unordered_map<std::string, Field> Fields;
-        std::unordered_map<std::string, Method> Methods;
-        std::unordered_map<std::string, Trait> TraitsImplements;
-        AccessModifier Access;
-    };
-
     struct Module {
-        private:
-            std::string _name;
-            std::string _fullPath;
-            AccessModifier _access;
+        std::string Name;
+        AccessModifier Access;
+        std::vector<Stmt *> AST;
+        Module *Parent = nullptr;
+        std::unordered_map<std::string, Variable> Variables;
+        std::unordered_map<std::string, Function> Functions;
+        std::unordered_map<std::string, Struct> Structures;
+        std::unordered_map<std::string, Trait> Traits;
+        std::unordered_map<std::string, Module *> Submodules;
+        std::unordered_map<std::string, Module *> Imports;
+        
+        explicit Module(std::string name, AccessModifier access) : Name(name), Access(access) {}
 
-        public:
-            std::vector<Stmt *> AST;
-            std::unordered_map<std::string, Variable> Variables;
-            std::unordered_map<std::string, Function> Functions;
-            std::unordered_map<std::string, Struct> Structs;
-            std::unordered_map<std::string, std::vector<ImplStmt *>> Implementations;
-            std::unordered_map<std::string, Trait> Traits;
-            std::unordered_map<std::string, ASTTypeKind> TypesDeclarations;
-            Module *Parent = nullptr;
-            std::unordered_map<std::string, Module *> SubModules;
-            std::unordered_map<std::string, Module *> Imports;
-            llvm::Module *Mod = nullptr;
-
-            Module(std::string name, std::string fullPath, AccessModifier access) : _name(name), _fullPath(fullPath), _access(access) {}
-
-            std::string
-            GetName() const {
-                return _name;
+        Struct *
+        FindStruct(const std::string &name) {
+            if (auto it = Structures.find(name); it != Structures.end()) {
+                it->second.Parent = this;
+                return &it->second;
             }
-
-            std::string
-            GetFullPath() const {
-                return _fullPath;
+            for (auto const &[_, mod] : Imports) {
+                if (auto *s = mod->FindStruct(name)) {
+                    return s;
+                }
             }
+            return nullptr;
+        }
 
-            AccessModifier
-            GetAccess() const {
-                return _access;
+        Trait *
+        FindTrait(const std::string &name) {
+            if (auto it = Traits.find(name); it != Traits.end()) {
+                it->second.Parent = this;
+                return &it->second;
             }
+            for (auto const &[_, mod] : Imports) {
+                if (auto *t = mod->FindTrait(name)) {
+                    return t;
+                }
+            }
+            return nullptr;
+        }
+
+        Function *
+        FindFunction(const std::string &name) {
+            if (auto it = Functions.find(name); it != Functions.end()) {
+                it->second.Parent = this;
+                return &it->second;
+            }
+            for (auto const &[_, mod] : Imports) {
+                if (auto *f = mod->FindFunction(name)) {
+                    return f;
+                }
+            }
+            return nullptr;
+        }
+
+        Variable *
+        FindGlobalVar(const std::string &name) {
+            if (auto it = Variables.find(name); it != Variables.end()) {
+                it->second.Parent = this;
+                return &it->second;
+            }
+            for (auto const &[_, mod] : Imports) {
+                if (auto *v = mod->FindGlobalVar(name)) {
+                    return v;
+                }
+            }
+            return nullptr;
+        }
+
+        Module *
+        FindModule(const std::string &name) {
+            if (auto it = Submodules.find(name); it != Submodules.end()) {
+                return it->second;
+            }
+            Module *cur = this;
+            while (cur) {
+                if (auto it = cur->Imports.find(name); it != cur->Imports.end()) {
+                    return it->second;
+                }
+                cur = cur->Parent;
+            }
+            return nullptr;
+        }
+
+        std::string
+        ToString(char sep = '.') const {
+            std::string res;
+            if (Parent) {
+                res += Parent->ToString() + sep;
+            }
+            res += Name;
+            return res;
+        }
     };
 }

@@ -54,8 +54,8 @@ namespace marble {
         VisitImportStmt(ImportStmt *is);
 
         void
-        VisitModuleDeclStmt(ModuleDeclStmt *mds);
-
+        VisitModDeclStmt(ModDeclStmt *mds);
+        
         void
         VisitFieldAsgnStmt(FieldAsgnStmt *fas);
 

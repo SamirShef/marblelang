@@ -24,7 +24,7 @@ namespace marble {
                 return ERR("expected type, but got `%0`");
             case ErrUndeclaredVariable:
                 return ERR("variable `%0` is undeclared");
-            case ErrUndeclaredFuntion:
+            case ErrUndeclaredFunction:
                 return ERR("function `%0` is undeclared");
             case ErrUndeclaredStructure:
                 return ERR("structure `%0` is undeclared");
@@ -34,6 +34,8 @@ namespace marble {
                 return ERR("field `%0` is undeclared in structure `%1`");
             case ErrUndeclaredMethod:
                 return ERR("method `%0` is undeclared in structure `%1`");
+            case ErrUndeclaredMod:
+                return ERR("module `%0` is undeclared in `%1`");
             case ErrRedefinitionVar:
                 return ERR("redefinition the variable `%0`");
             case ErrRedefinitionFun:
@@ -46,7 +48,7 @@ namespace marble {
                 return ERR("redefinition the method `%0`");
             case ErrRedefinitionTrait:
                 return ERR("redefinition the trait `%0`");
-            case ErrRedefinitionModule:
+            case ErrRedefinitionMod:
                 return ERR("redefinition the module `%0`");
             case ErrTypeMismatchNotNum:
                 return ERR("expected number, but got `%0`");
@@ -86,6 +88,8 @@ namespace marble {
                 return ERR("structure `%0` is private");
             case ErrTraitIsPrivate:
                 return ERR("trait `%0` is private");
+            case ErrModIsPrivate:
+                return ERR("module `%0` is private");
             case ErrCannotDeclareHere:
                 return ERR("cannot make declaration here (only in traits)");
             case ErrUndeclaredType:
@@ -95,9 +99,9 @@ namespace marble {
             case ErrCannotImplTraitMethod_RetTypeMismatch:
                 return ERR("cannot imlement method `%0` from trait `%1`: expected return type `%2`, but received `%3`");
             case ErrCannotImplTraitMethod_FewArgs:
-                return ERR("cannot imlement method `%0` from trait `%1: expected %2 argument(s), but received %3");
+                return ERR("cannot imlement method `%0` from trait `%1`: expected %2 argument(s), but received %3");
             case ErrCannotImplTraitMethod_ArgTypeMismatch:
-                return ERR("cannot imlement method `%0` from trait `%1: argument `%2` expected type `%3`, but received `%4`");
+                return ERR("cannot imlement method `%0` from trait `%1`: argument `%2` expected type `%3`, but received `%4`");
             case ErrNotImplTraitMethod:
                 return ERR("method `%0` from trait `%1` does not implemented");
             case ErrExpectedDeclarationInTrait:
@@ -116,22 +120,36 @@ namespace marble {
                 return ERR("deleting of a nil value");
             case ErrDelOfCreatedNotByNew:
                 return ERR("deleting a value that was not created with new");
-            case ErrCannotFindModule:
-                return ERR("cannot be found module `%0`");
-            case ErrMultipleImport:
-                return ERR("multiple import of `%0`");
-            case ErrDoesNotHaveFunInMod:
-                return ERR("function `%0` does not contains in module `%1`");
-            case ErrDoesNotHaveVarInMod:
-                return ERR("variable `%0` does not contains in module `%1`");
-            case ErrAccessStaticFieldFromNonType:
-                return ERR("accessing of static field `%0` from non-type");
-            case ErrAccessingNonStaticFieldFromType:
-                return ERR("accessing of non-static field `%0` from type");
-            case ErrAccessStaticMethodFromNonType:
-                return ERR("accessing of static method `%0` from non-type");
-            case ErrAccessingNonStaticMethodFromType:
-                return ERR("accessing of non-static method `%0` from type");
+            case ErrEchoTypeIsNoth:
+                return ERR("cannot printing noth value");
+            case ErrMultipleTraitImpl:
+                return ERR("multiple implementation of trait `%0` for `%1`");
+            case ErrNewOnTrait:
+                return ERR("cannot create trait type with `new` operator");
+            case ErrNewOnNoth:
+                return ERR("cannot create type `noth` with `new` operator");
+            case ErrNothPtrArithmetic:
+                return ERR("cannot use pointer arithmetic with type `*noth`");
+            case ErrWrongMainSignature:
+                return ERR("incorrect main signature: use `main(): i32` or `main(i32, **char): i32` signatures");
+            case ErrNothVar:
+                return ERR("variable `%0` was defined with type `noth`");
+            case ErrDerefNothPtr:
+                return ERR("cannot dereference `*noth`");
+            case ErrCallingNonConstMethodForConstObj:
+                return ERR("cannot call non-const method `%0` from constant object");
+            case ErrCouldNotFindMod:
+                return ERR("could not find module `%0`");
+            case ErrDoesNotHaveMain:
+                return ERR("program does not have main function. Please add `main(): i32` or `main(i32, **char): i32` signature");
+            case ErrFieldStatic:
+                return ERR("accessing of static field `%0`");
+            case ErrMethodStatic:
+                return ERR("calling of static method `%0`");
+            case ErrFieldNotStatic:
+                return ERR("accessing of non-static field `%0`");
+            case ErrMethodNotStatic:
+                return ERR("calling of non-static method `%0`");
         }
     }
 }

@@ -1,48 +1,49 @@
 #pragma once
+#include <llvm/Support/Path.h>
 #include <marble/Lexer/Lexer.h>
 #include <marble/Parser/Parser.h>
-#include <marble/Basic/DiagnosticEngine.h>
+#include <llvm/Support/SourceMgr.h>
+#include <llvm/Support/raw_ostream.h>
 #include <marble/Basic/Module.h>
-#include <string>
-#include <unordered_map>
+
+extern std::string
+normalizePath(std::string path);
 
 namespace marble {
     class ModuleManager {
-        std::unordered_map<std::string, Module *> _loadedModules;
-        DiagnosticEngine &_diag;
+        inline static std::unordered_map<std::string, Module *> _mods;
 
     public:
-        ModuleManager(DiagnosticEngine &diag) : _diag(diag) {}
+        inline static const std::string LibsPath = "Libs/";
 
-        Module *
-        LoadModule(std::string fullPath, AccessModifier access, llvm::SourceMgr &srcMgr) {
-            if (_loadedModules.find(fullPath) != _loadedModules.end()) {
-                return _loadedModules[fullPath];
-            }
-            auto bufferOrErr = llvm::MemoryBuffer::getFile(fullPath);
-            if (std::error_code ec = bufferOrErr.getError()) {
-                return nullptr;
+        static Module *
+        LoadModule(std::string path, llvm::SourceMgr &srcMgr, DiagnosticEngine &diag, AccessModifier access = AccessPub) {
+            int last_dot_pos = path.find_last_of('.');
+            if (last_dot_pos != std::string::npos && last_dot_pos != 0) { 
+                path.erase(last_dot_pos);
             }
 
-            Module *mod = new Module(fullPath, fullPath, access);
-            _loadedModules[fullPath] = mod;
+            if (auto it = _mods.find(normalizePath(path)); it != _mods.end()) {
+                return it->second;
+            }
 
-            std::unique_ptr<llvm::MemoryBuffer> buffer = std::move(*bufferOrErr);
-            const char *bufferStart = buffer->getBufferStart();
-            const char *bufferEnd = buffer->getBufferEnd();
-            unsigned bufferID = srcMgr.AddNewSourceBuffer(std::move(buffer), llvm::SMLoc());
-            llvm::StringRef srcMgrBuffer = srcMgr.getMemoryBuffer(bufferID)->getBuffer();
+            std::string modName = llvm::sys::path::stem(path).str();
+            auto bufferOrErr = llvm::MemoryBuffer::getFile(path + ".mr");
             
-            Lexer lex(_diag, srcMgr, bufferID);
-            Parser parser(lex, _diag, srcMgr, *this);
+            if (std::error_code ec = bufferOrErr.getError()) {
+                bufferOrErr = llvm::MemoryBuffer::getFile(path + "/mod.mr");
+                
+                if (std::error_code ec = bufferOrErr.getError()) {
+                    return nullptr;
+                }
+            }
+            unsigned bufferId = srcMgr.AddNewSourceBuffer(std::move(*bufferOrErr), llvm::SMLoc());
+            Lexer lex(srcMgr, diag, bufferId);
+            Parser parser(lex, diag);
+            Module *mod = new Module(modName, access);
             mod->AST = parser.ParseAll();
-
+            _mods.emplace(normalizePath(path), mod);
             return mod;
-        }
-
-        const std::unordered_map<std::string, Module *> &
-        GetLoadedModules() const {
-            return _loadedModules;
         }
     };
 }

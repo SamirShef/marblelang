@@ -43,8 +43,8 @@ namespace marble {
                     return NODE(VisitDelStmt, DelStmt);
                 case NkImportStmt:
                     return NODE(VisitImportStmt, ImportStmt);
-                case NkModuleDeclStmt:
-                    return NODE(VisitModuleDeclStmt, ModuleDeclStmt);
+                case NkModDeclStmt:
+                    return NODE(VisitModDeclStmt, ModDeclStmt);
                 
                 case NkBinaryExpr:
                     return NODE(VisitBinaryExpr, BinaryExpr);

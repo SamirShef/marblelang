@@ -1,50 +1,36 @@
-#include <marble/Basic/ModuleManager.h>
+#include "marble/Lexer/Token.h"
 #include <marble/Parser/Parser.h>
 #include <marble/Parser/Precedence.h>
-#include <llvm/Support/Path.h>
 
 static marble::AccessModifier access;
-static llvm::BumpPtrAllocator allocator;
 
-extern std::string libsPath;
+static llvm::BumpPtrAllocator _allocator;
 
 namespace marble {
     std::vector<Stmt *>
     Parser::ParseAll() {
         std::vector<Stmt *> ast;
-        while (!_curTok.Is(TkEof)) {
-            if (Stmt *s = ParseStmt()) {
-                ast.push_back(s);
-            }
+        while (auto s = parseStmt()) {
+            ast.push_back(s);
         }
         return ast;
     }
+    
+    template <typename T, typename ...Args>
+    T *
+    Parser::createNode(Args &&... args) {
+        void *mem = _allocator.Allocate<T>();
+        return new (mem) T(std::forward<Args>(args)...);
+    }
 
     Stmt *
-    Parser::ParseStmt(bool consumeSemi) {
+    Parser::parseStmt(bool consumeSemi) {
         if (_curTok.Is(TkEof)) {
             return nullptr;
         }
         access = AccessPriv;
         if (expect(TkPub)) {
             access = AccessPub;
-        }
-        bool isStatic = expect(TkStatic);
-        if (isStatic) {
-            Stmt *stmt;
-            if (_curTok.Is(TkVar)) {
-                stmt = parseVarDeclStmt();
-                if (consumeSemi && !expect(TkSemi)) {
-                    _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
-                        << getRangeFromTok(_curTok)
-                        << ";"                  // expected
-                        << _curTok.GetText();   // got
-                }
-            }
-            else {
-                stmt = parseFunDeclStmt();
-            }
-            return stmt;
         }
         switch (_curTok.GetKind()) {
             case TkVar:
@@ -162,7 +148,21 @@ namespace marble {
                 return stmt;
             }
             case TkMod: {
-                return parseModuleDeclStmt();
+                return parseModDeclStmt();
+            }
+            case TkStatic: {
+                consume();
+                if (_curTok.Is(TkVar) || _curTok.Is(TkConst)) {
+                    Stmt *stmt = parseVarDeclStmt();
+                    if (consumeSemi && !expect(TkSemi)) {
+                        _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
+                            << getRangeFromTok(_curTok)
+                            << ";"                  // expected
+                            << _curTok.GetText();   // got
+                    }
+                    return stmt;
+                }
+                return parseFunDeclStmt();
             }
             default:
                 _diag.Report(_curTok.GetLoc(), ErrExpectedStmt)
@@ -171,12 +171,6 @@ namespace marble {
                 consume();
                 return nullptr;
         }
-    }
-    
-    template <typename T, typename ...Args>
-    T *
-    Parser::createNode(Args &&... args) {
-        return new T(std::forward<Args>(args)...);
     }
 
     Stmt *
@@ -202,11 +196,8 @@ namespace marble {
 
     Stmt *
     Parser::parseVarDeclStmt() {
-        Token firstTok = _curTok;
         bool isStatic = _lastTok.Is(TkStatic);
-        if (isStatic) {
-            firstTok = _lastTok;
-        }
+        Token firstTok = isStatic ? _lastTok : _curTok;
         bool isConst = consume().Is(TkConst);
         std::string name = _curTok.GetText();
         if (!expect(TkId)) {
@@ -268,12 +259,12 @@ namespace marble {
 
     Stmt *
     Parser::parseFunDeclStmt() {
-        Token firstTok = _curTok;
         bool isStatic = _lastTok.Is(TkStatic);
-        if (isStatic) {
+        Token firstTok = _lastTok;
+        consume();
+        if (!isStatic) {
             firstTok = _lastTok;
         }
-        consume();
         std::string name = _curTok.GetText();
         if (!expect(TkId)) {
             _diag.Report(_curTok.GetLoc(), ErrExpectedId)
@@ -316,7 +307,7 @@ namespace marble {
         AccessModifier accessCopy = access;
         std::vector<Stmt *> block;
         while (!expect(TkRBrace)) {
-            block.push_back(ParseStmt());
+            block.push_back(parseStmt());
         }
         return createNode<FunDeclStmt>(name, retType, args, block, false, isStatic, accessCopy, firstTok.GetLoc(), _curTok.GetLoc());
     }
@@ -335,7 +326,7 @@ namespace marble {
     Parser::parseIfElseStmt() {
         AccessModifier accessCopy = access;
         Token firstTok = consume();
-        Expr *cond = parseExpr(PrecLowest);
+        Expr *cond = parseExpr(PrecLowest, false);
         std::vector<Stmt *> thenBranch;
         if (!expect(TkLBrace)) {
             _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
@@ -345,18 +336,18 @@ namespace marble {
         }
         else {
             while (!expect(TkRBrace)) {
-                thenBranch.push_back(ParseStmt());
+                thenBranch.push_back(parseStmt());
             }
         }
         std::vector<Stmt *> elseBranch;
         if (expect(TkElse)) {
             if (expect(TkLBrace)) {
                 while (!expect(TkRBrace)) {
-                    elseBranch.push_back(ParseStmt());
+                    elseBranch.push_back(parseStmt());
                 }
             }
             else {
-                elseBranch.push_back(ParseStmt());
+                elseBranch.push_back(parseStmt());
             }
         }
         return createNode<IfElseStmt>(cond, thenBranch, elseBranch, accessCopy, firstTok.GetLoc(), _curTok.GetLoc());
@@ -368,7 +359,7 @@ namespace marble {
         Token firstTok = consume();
         Stmt *indexator = nullptr;
         if (_curTok.Is(TkVar) || _curTok.Is(TkId) && isAssignmentOp(_nextTok.GetKind())) {
-            indexator = ParseStmt(false);
+            indexator = parseStmt(false);
             if (!expect(TkComma)) {
                 _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
                     << getRangeFromTok(_curTok)
@@ -376,7 +367,7 @@ namespace marble {
                     << _curTok.GetText();   // got
             }
         }
-        Expr *cond = parseExpr(PrecLowest);
+        Expr *cond = parseExpr(PrecLowest, false);
         Stmt *iteration = nullptr;
         if (!_curTok.Is(TkLBrace)) {
             if (!expect(TkComma)) {
@@ -385,7 +376,7 @@ namespace marble {
                     << ","                  // expected
                     << _curTok.GetText();   // got
             }
-            iteration = ParseStmt(false);
+            iteration = parseStmt(false);
         }
         std::vector<Stmt *> block;
         if (!expect(TkLBrace)) {
@@ -396,7 +387,7 @@ namespace marble {
         }
         else {
             while (!expect(TkRBrace)) {
-                block.push_back(ParseStmt());
+                block.push_back(parseStmt());
             }
         }
         return createNode<ForLoopStmt>(indexator, cond, iteration, block, accessCopy, firstTok.GetLoc(), _curTok.GetLoc());
@@ -420,7 +411,7 @@ namespace marble {
         }
         std::vector<Stmt *> body;
         while (!expect(TkRBrace)) {
-            body.push_back(ParseStmt());
+            body.push_back(parseStmt());
         }
         return createNode<StructStmt>(name, body, accessCopy, firstTok.GetLoc(), _curTok.GetLoc());
     }
@@ -429,24 +420,14 @@ namespace marble {
     Parser::parseImplStmt() {
         AccessModifier accessCopy = access;
         Token firstTok = consume();
-        std::string traitName = _curTok.GetText();
-        std::string structName = "";
-        if (!expect(TkId)) {
-            _diag.Report(_curTok.GetLoc(), ErrExpectedId)
-                << getRangeFromTok(_curTok)
-                << _curTok.GetText();
-        }
+        ASTType traitType = consumeType();
+        ASTType structType;
         if (expect(TkFor)) {
-            structName = _curTok.GetText();
-            if (!expect(TkId)) {
-                _diag.Report(_curTok.GetLoc(), ErrExpectedId)
-                    << getRangeFromTok(_curTok)
-                    << _curTok.GetText();
-            }
+            structType = consumeType();
         }
         else {
-            structName = traitName;
-            traitName = "";
+            structType = traitType;
+            traitType = ASTType();
         }
         if (!expect(TkLBrace)) {
             _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
@@ -456,9 +437,9 @@ namespace marble {
         }
         std::vector<Stmt *> body;
         while (!expect(TkRBrace)) {
-            body.push_back(ParseStmt());
+            body.push_back(parseStmt());
         }
-        return createNode<ImplStmt>(traitName, structName, body, accessCopy, firstTok.GetLoc(), _curTok.GetLoc());
+        return createNode<ImplStmt>(traitType, structType, body, accessCopy, firstTok.GetLoc(), _curTok.GetLoc());
     }
 
     Stmt *
@@ -479,7 +460,7 @@ namespace marble {
         }
         std::vector<Stmt *> body;
         while (!expect(TkRBrace)) {
-            body.push_back(ParseStmt());
+            body.push_back(parseStmt());
         }
         return createNode<TraitDeclStmt>(name, body, accessCopy, firstTok.GetLoc(), _curTok.GetLoc());
     }
@@ -496,24 +477,31 @@ namespace marble {
     Parser::parseImportStmt() {
         AccessModifier accessCopy = access;
         Token firstTok = consume();
-        std::string path;
         bool isLocalImport = false;
+        std::string path;
         if (_curTok.GetKind() == TkStrLit) {
-            path = consume().GetText();
             isLocalImport = true;
+            path = consume().GetText();
         }
         else {
-            while (_curTok.GetKind() != TkSemi) {
-                path += _curTok.GetText() == "." ? "/" : _curTok.GetText();
-                consume();
-            }
+            do {
+                std::string part = _curTok.GetText();
+                if (!expect(TkId)) {
+                    _diag.Report(_curTok.GetLoc(), ErrExpectedId)
+                        << getRangeFromTok(_curTok)
+                        << _curTok.GetText();
+                }
+                path += part;
+                if (_curTok.Is(TkDot)) {
+                    path += "/";
+                }
+            } while (expect(TkDot));
         }
-        importModuleHandler(path, isLocalImport, firstTok.GetLoc());
-        return createNode<ImportStmt>(path, isLocalImport, accessCopy, firstTok.GetLoc(), _curTok.GetLoc());
+        return createNode<ImportStmt>(path, isLocalImport, access, firstTok.GetLoc(), _curTok.GetLoc());
     }
 
     Stmt *
-    Parser::parseModuleDeclStmt() {
+    Parser::parseModDeclStmt() {
         AccessModifier accessCopy = access;
         Token firstTok = consume();
         std::string name = _curTok.GetText();
@@ -530,9 +518,9 @@ namespace marble {
         }
         std::vector<Stmt *> body;
         while (!expect(TkRBrace)) {
-            body.push_back(ParseStmt());
+            body.push_back(parseStmt());
         }
-        return createNode<ModuleDeclStmt>(name, body, accessCopy, firstTok.GetLoc(), _curTok.GetLoc());
+        return createNode<ModDeclStmt>(name, body, accessCopy, firstTok.GetLoc(), _curTok.GetLoc());
     }
 
     Argument
@@ -554,7 +542,7 @@ namespace marble {
     }
 
     Expr *
-    Parser::parsePrefixExpr() {
+    Parser::parsePrefixExpr(bool allowStruct) {
         std::string text = _curTok.GetText();
         switch (_curTok.GetKind()) {
             case TkId: {
@@ -581,21 +569,93 @@ namespace marble {
                         return expr;
                     }
                     case TkLBrace: {
-                        consume();
-                        return parseStructExprInitializer(nameToken.GetText(), nameToken.GetLoc());
+                        if (allowStruct) {
+                            consume();
+                            std::vector<std::pair<std::string, Expr *>> initializer;
+                            while (!expect(TkRBrace)) {
+                                std::string name = _curTok.GetText();
+                                if (!expect(TkId)) {
+                                    _diag.Report(_curTok.GetLoc(), ErrExpectedId)
+                                        << getRangeFromTok(_curTok)
+                                        << _curTok.GetText();
+                                }
+                                if (!expect(TkColon)) {
+                                    _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
+                                        << getRangeFromTok(_curTok)
+                                        << ":"                  // expected
+                                        << _curTok.GetText();   // got
+                                }
+                                initializer.push_back({ name, parseExpr(PrecLowest) });
+                                if (!_curTok.Is(TkRBrace)) {
+                                    if (!expect(TkComma)) {
+                                        _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
+                                            << getRangeFromTok(_curTok)
+                                            << ","                  // expected
+                                            << _curTok.GetText();   // got
+                                    }
+                                }
+                            }
+                            return createNode<StructExpr>(ASTType(ASTTypeKind::Unknown, nameToken.GetText(), false, false), initializer, nameToken.GetLoc(), _curTok.GetLoc());
+                        }
+                        else {
+                            Expr *expr = createNode<VarExpr>(nameToken.GetText(), nameToken.GetLoc(), _curTok.GetLoc());
+                            if (expect(TkDot)) {
+                                return parseChainExpr(expr);
+                            }
+                            return expr;
+                        }
                     }
                     default: {
+                        Token startTok = _lastTok;
                         Expr *expr = createNode<VarExpr>(nameToken.GetText(), nameToken.GetLoc(), _curTok.GetLoc());
                         if (expect(TkDot)) {
-                            return parseChainExpr(expr);
+                            expr = parseChainExpr(expr);
+                        }
+                        if (_curTok.Is(TkLBrace)) {
+                            if (allowStruct) {
+                                std::string structName = _lastTok.GetText();
+                                Token endTok = _lastTok;
+                                std::string path(startTok.GetLoc().getPointer(), endTok.GetLoc().getPointer() - startTok.GetLoc().getPointer() + structName.size());
+                                if (path.find('(') != std::string::npos || path.find('[') != std::string::npos) {
+                                    return expr;
+                                }
+                                consume();
+                                std::vector<std::pair<std::string, Expr *>> initializer;
+                                while (!expect(TkRBrace)) {
+                                    std::string name = _curTok.GetText();
+                                    if (!expect(TkId)) {
+                                        _diag.Report(_curTok.GetLoc(), ErrExpectedId)
+                                            << getRangeFromTok(_curTok)
+                                            << _curTok.GetText();
+                                    }
+                                    if (!expect(TkColon)) {
+                                        _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
+                                            << getRangeFromTok(_curTok)
+                                            << ":"                  // expected
+                                            << _curTok.GetText();   // got
+                                    }
+                                    initializer.push_back({ name, parseExpr(PrecLowest) });
+                                    if (!_curTok.Is(TkRBrace)) {
+                                        if (!expect(TkComma)) {
+                                            _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
+                                                << getRangeFromTok(_curTok)
+                                                << ","                  // expected
+                                                << _curTok.GetText();   // got
+                                        }
+                                    }
+                                }
+                                return createNode<StructExpr>(ASTType(ASTTypeKind::Unknown, structName, false, false, nullptr, path), initializer, nameToken.GetLoc(),
+                                                              _curTok.GetLoc());
+                            }
                         }
                         return expr;
                     }
                 }
             }
             #define LIT(kind, type_val, field, val) \
-                createNode<LiteralExpr>(ASTVal(ASTType(ASTTypeKind::kind, type_val, true, 0), \
-                                               ASTValData { .field = (val) }, false, false), consume().GetLoc(), _curTok.GetLoc())
+                createNode<LiteralExpr>(ASTVal(ASTType(ASTTypeKind::kind, type_val, false, 0),                                              \
+                                               ASTValData { .field = (val) }, false, false), consume().GetLoc(),                            \
+                                               llvm::SMLoc::getFromPointer(_curTok.GetLoc().getPointer() + _curTok.GetText().size()))
             case TkBoolLit:
                 return LIT(Bool, "bool", boolVal, text == "true");
             case TkCharLit:
@@ -614,7 +674,7 @@ namespace marble {
             case TkMinus:
             case TkBang: {
                 Token op = consume();
-                return createNode<UnaryExpr>(parseExpr(PrecLowest), op, op.GetLoc(), _curTok.GetLoc());
+                return createNode<UnaryExpr>(parsePrefixExpr(allowStruct), op, op.GetLoc(), _curTok.GetLoc());
             }
             case TkLParen: {
                 Token lparen = consume();
@@ -630,30 +690,28 @@ namespace marble {
                 return expr;
             }
             case TkNil: {
-                return createNode<NilExpr>(consume().GetLoc(), _curTok.GetLoc());
+                return createNode<NilExpr>(consume().GetLoc(), llvm::SMLoc::getFromPointer(_curTok.GetLoc().getPointer() + _curTok.GetText().size()));
             }
             case TkStar: {
                 Token star = consume();
-                Expr *expr = parsePrefixExpr();
+                Expr *expr = parsePrefixExpr(allowStruct);
                 return createNode<DerefExpr>(expr, star.GetLoc(), _curTok.GetLoc());
             }
             case TkAnd: {
                 Token amp = consume();
-                Expr *expr = parsePrefixExpr();
+                Expr *expr = parsePrefixExpr(allowStruct);
                 return createNode<RefExpr>(expr, amp.GetLoc(), _curTok.GetLoc());
             }
             case TkNew: {
                 Token newTok = consume();
                 ASTType type;
                 StructExpr *se = nullptr;
-                llvm::SMLoc start = _curTok.GetLoc();
-                type = consumeType();
-                if (expect(TkLBrace)) {
-                    se = llvm::cast<StructExpr>(parseStructExprInitializer(type.GetVal(), start));
-                }
-                else if (_curTok.GetKind() == TkId && _nextTok.GetKind() == TkLBrace) {
+                if (_curTok.GetKind() == TkId && _nextTok.GetKind() == TkLBrace) {
                     se = llvm::cast<StructExpr>(parsePrefixExpr());
-                    type = ASTType(ASTTypeKind::Struct, se->GetName(), true, 0);
+                    type = ASTType(ASTTypeKind::Unknown, se->GetType().GetVal(), false, 0);
+                }
+                else {
+                    type = consumeType();
                 }
                 return createNode<NewExpr>(type, se, newTok.GetLoc(), _curTok.GetLoc());
             }
@@ -667,8 +725,8 @@ namespace marble {
     }
 
     Expr *
-    Parser::parseExpr(int minPrec) {
-        Expr *lhs = parsePrefixExpr();
+    Parser::parseExpr(int minPrec, bool allowStruct) {
+        Expr *lhs = parsePrefixExpr(allowStruct);
         if (!lhs) {
             return nullptr;
         }
@@ -677,7 +735,7 @@ namespace marble {
             Token op = consume();
             int prec = GetTokPrecedence(op.GetKind());
 
-            Expr *rhs = parseExpr(prec);
+            Expr *rhs = parseExpr(prec, allowStruct);
             lhs = createNode<BinaryExpr>(lhs, rhs, op, lhs->GetStartLoc(), _curTok.GetLoc());
         }
 
@@ -686,17 +744,7 @@ namespace marble {
 
     Expr *
     Parser::parseChainExpr(Expr *base) {
-        static bool canInitStruct = true;
-        static std::string structName = "";
-        static llvm::SMLoc structStart = llvm::SMLoc();
-        if (structName.empty()) {
-            structName = llvm::cast<VarExpr>(base)->GetName();
-        }
-        if (structStart == llvm::SMLoc()) {
-            structStart = base->GetStartLoc();
-        }
-
-        Token nameToken = _curTok; 
+        Token nameToken = _curTok;
         if (!expect(TkId)) {
             _diag.Report(_curTok.GetLoc(), ErrExpectedId)
                 << getRangeFromTok(_curTok)
@@ -716,59 +764,15 @@ namespace marble {
                     }
                 }
             }
-            canInitStruct = false;
             expr = createNode<MethodCallExpr>(base, nameToken.GetText(), args, nameToken.GetLoc(), _curTok.GetLoc());
         }
         else {
-            structName += structName.empty() ? nameToken.GetText() : "/" + nameToken.GetText();
             expr = createNode<FieldAccessExpr>(base, nameToken.GetText(), nameToken.GetLoc(), _curTok.GetLoc());
         }
-        if (_curTok.Is(TkLBrace)) {
-            if (canInitStruct) {
-                consume();
-                canInitStruct = true;
-                Expr *expr = parseStructExprInitializer(structName, structStart);
-                structName = "";
-                structStart = llvm::SMLoc();
-                return expr;
-            }
-        }
-        else if (expect(TkDot)) {
+        if (expect(TkDot)) {
             return parseChainExpr(expr);
         }
-        canInitStruct = true;
-        structName = "";
-        structStart = llvm::SMLoc();
         return expr;
-    }
-
-    Expr *
-    Parser::parseStructExprInitializer(std::string name, llvm::SMLoc start) {
-        std::vector<std::pair<std::string, Expr *>> initializer;
-        while (!expect(TkRBrace)) {
-            std::string name = _curTok.GetText();
-            if (!expect(TkId)) {
-                _diag.Report(_curTok.GetLoc(), ErrExpectedId)
-                    << getRangeFromTok(_curTok)
-                    << _curTok.GetText();
-            }
-            if (!expect(TkColon)) {
-                _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
-                    << getRangeFromTok(_curTok)
-                    << ":"                  // expected
-                    << _curTok.GetText();   // got
-            }
-            initializer.push_back({ name, parseExpr(PrecLowest) });
-            if (!_curTok.Is(TkRBrace)) {
-                if (!expect(TkComma)) {
-                    _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
-                        << getRangeFromTok(_curTok)
-                        << ","                  // expected
-                        << _curTok.GetText();   // got
-                }
-            }
-        }
-        return createNode<StructExpr>(name, initializer, start, _curTok.GetLoc());
     }
     
     Token
@@ -803,28 +807,34 @@ namespace marble {
                 return TYPE(F64, "f64");
             case TkNoth:
                 return TYPE(Noth, "noth");
+            case TkId: {
+                if (expect(TkDot)) {
+                    std::string path = type.GetText() + ".";
+                    do {
+                        path += _curTok.GetText();
+                        if (!expect(TkId)) {
+                            _diag.Report(_curTok.GetLoc(), ErrExpectedId)
+                                << getRangeFromTok(_curTok)
+                                << _curTok.GetText();
+                        }
+                        if (_curTok.Is(TkDot)) {
+                            path += ".";
+                        }
+                    } while (expect(TkDot));
+                    int lastDot = path.find_last_of('.');
+                    auto res = TYPE(Unknown, path.substr(lastDot + 1));
+                    res.SetFullPath(path);
+                    return res;
+                }
+                return TYPE(Unknown, type.GetText());
+            }
+            default:
+                _diag.Report(type.GetLoc(), ErrExpectedType)
+                    << getRangeFromTok(type)
+                    << type.GetText();
+                return TYPE(I32, "i32");
             #undef TYPE
         }
-
-        if (!type.Is(TkId)) {
-            _diag.Report(_curTok.GetLoc(), ErrExpectedType)
-                << getRangeFromTok(_curTok)
-                << _curTok.GetText();
-            return ASTType(ASTTypeKind::I32, "i32", isConst, pointerDepth);
-        }
-
-        std::string path = type.GetText();
-        while (expect(TkDot)) {
-            if (!_curTok.Is(TkId)) {
-                _diag.Report(_curTok.GetLoc(), ErrExpectedId)
-                    << getRangeFromTok(_curTok)
-                    << _curTok.GetText();
-                break;
-            }
-            path += "/" + _curTok.GetText();
-            consume();
-        }
-        return ASTType(ASTTypeKind::Unknown, path, isConst, pointerDepth);
     }
 
     Expr *
@@ -844,65 +854,6 @@ namespace marble {
             default:
                 return nullptr;
             #undef OP
-        }
-    }
-
-    void
-    Parser::importModuleHandler(std::string path, bool isLocalImport, llvm::SMLoc startLoc) {
-        if (isLocalImport) {
-            unsigned bufferID = _srcMgr.FindBufferContainingLoc(startLoc);
-            if (bufferID == 0) {
-                _diag.Report(startLoc, ErrCannotFindModule)
-                    << llvm::SMRange(startLoc, _curTok.GetLoc())
-                    << path;
-                return;
-            }
-            const llvm::MemoryBuffer *buffer = _srcMgr.getMemoryBuffer(bufferID);
-            if (!buffer) {
-                _diag.Report(startLoc, ErrCannotFindModule)
-                    << llvm::SMRange(startLoc, _curTok.GetLoc())
-                    << path;
-                return;
-            }
-            path = llvm::sys::path::parent_path(buffer->getBufferIdentifier()).str() + path;
-        }
-        else {
-            path = libsPath + path;
-        }
-        auto bufferOrErr = llvm::MemoryBuffer::getFile(path + ".mr");
-        if (std::error_code ec = bufferOrErr.getError()) {
-            path += "/mod";
-        }
-        Module *mod = _modManager.LoadModule(path + ".mr", AccessPub, _srcMgr);
-        if (mod) {
-            registerTypes(mod);
-        }
-        else {
-            _diag.Report(startLoc, ErrCannotFindModule)
-                << llvm::SMRange(startLoc, _curTok.GetLoc())
-                << path;
-            return;
-        }
-    }
-
-    void
-    Parser::registerTypes(Module *mod) {
-        if (!mod) {
-            return;
-        }
-        
-        for (auto *stmt : mod->AST) {
-            if (auto *s = llvm::dyn_cast<StructStmt>(stmt)) {
-                mod->Structs[s->GetName()] = Struct { .Name = s->GetName(), .Fields = {}, .Methods = {}, .TraitsImplements = {}, .Access = s->GetAccess() };
-                //                                                          ^^^^^^^^^^^^ fields will be initialized in sema
-            }
-            else if (auto *t = llvm::dyn_cast<TraitDeclStmt>(stmt)) {
-                mod->Traits[t->GetName()] = Trait { .Name = t->GetName(), .Methods = {}, .Access = t->GetAccess() };
-                //                                                        ^^^^^^^^^^^^^ methods will be initialized in sema
-            }
-            else if (auto *m = llvm::dyn_cast<ModuleDeclStmt>(stmt)) {
-                registerTypes(new Module(m->GetName(), m->GetName(), m->GetAccess()));
-            }
         }
     }
     

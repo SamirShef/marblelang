@@ -1,0 +1,14 @@
+struct Test {
+    static var field: i32;
+}
+
+impl Test {
+    pub static fun method(): i32 {
+        return Test.field;
+    }
+}
+
+fun main(): i32 {
+    echo Test.method(); echo '\n'; // 0
+    return 0;
+}

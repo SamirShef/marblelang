@@ -1,0 +1,11 @@
+mod Test {
+    pub struct Test {
+        pub static var field: i32;
+    }
+}
+
+fun main(): i32 {
+    var t: Test.Test;
+    echo t.field; echo '\n';
+    return 0;
+}

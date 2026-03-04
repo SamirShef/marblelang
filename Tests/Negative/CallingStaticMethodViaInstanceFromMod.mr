@@ -1,0 +1,15 @@
+mod Test {
+    pub struct Test {}
+
+    impl Test {
+        pub static fun method(): i32 {
+            return 0;
+        }
+    }
+}
+
+fun main(): i32 {
+    var t: Test.Test;
+    echo t.method(); echo '\n';
+    return 0;
+}

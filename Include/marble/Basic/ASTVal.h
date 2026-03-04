@@ -2,8 +2,8 @@
 #include <marble/Basic/ASTType.h>
 
 namespace marble {
-    class Module;
-    
+    struct Module;
+
     union ASTValData {
         bool    boolVal;
         char    charVal;
@@ -19,25 +19,21 @@ namespace marble {
         ASTValData _data;
         bool _isNil;
         bool _createdByNew;
-        Module *_mod;
+        Module *_mod = nullptr;
         bool _isType = false;
 
     public:
-        explicit ASTVal(ASTType type, ASTValData data, bool isNil, bool createdByNew) : _type(type), _data(data), _isNil(isNil), _createdByNew(createdByNew) {}
+        explicit ASTVal(ASTType type, ASTValData data, bool isNil, bool createdByNew, bool isType = false) : _type(type), _data(data), _isNil(isNil),
+                        _createdByNew(createdByNew), _isType(isType) {}
         
-        ASTType
-        GetType() const {
+        ASTType &
+        GetType() {
             return _type;
         }
 
         ASTValData
         GetData() const {
             return _data;
-        }
-
-        void
-        SetType(ASTType type) {
-            _type = type;
         }
 
         bool

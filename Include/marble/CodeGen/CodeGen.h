@@ -1,17 +1,21 @@
 #pragma once
-#include <marble/Basic/ModuleManager.h>
+#include <marble/Basic/Module.h>
 #include <marble/AST/Visitor.h>
 #include <marble/Basic/DiagnosticEngine.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
 #include <stack>
+#include <string>
 
 namespace marble {
     class CodeGen : public ASTVisitor<CodeGen, llvm::Value *> {
         llvm::SourceMgr &_srcMgr;
+        DiagnosticEngine &_diag;
         llvm::LLVMContext _context;
-        Module *_module;
+        std::unique_ptr<llvm::Module> _module;
         llvm::IRBuilder<> _builder;
+        Module *_curMod = nullptr;
+        std::string _parentDir;
 
         std::stack<std::unordered_map<std::string, std::tuple<llvm::Value *, llvm::Type *, ASTType>>> _vars;
 
@@ -21,24 +25,23 @@ namespace marble {
 
         std::stack<std::pair<llvm::BasicBlock *, llvm::BasicBlock *>> _loopDeth;    // first for break, second for continue
 
-        std::vector<std::string> _modulesPath;
-        Module *_currentMod = nullptr;
-        Module *_rootMod = nullptr;
+        std::unordered_map<std::string, llvm::Constant *> _strPool;
 
         struct Field {
             std::string Name;
             llvm::Type *Type;
             marble::ASTType ASTType;
-            llvm::Value *Val;
+            Expr *DefaultExpr = nullptr;
             bool ManualInitialized;
-            bool IsStatic;
             long Index;
+            bool IsStatic;
         };
 
         struct Method {
             std::string Name;
             llvm::Type *RetType;
             std::vector<llvm::Type *> Args;
+            bool IsStatic;
         };
 
         struct Trait {
@@ -58,28 +61,18 @@ namespace marble {
         std::unordered_map<std::string, Struct> _structs;
 
     public:
-        explicit CodeGen(Module *mod, llvm::SourceMgr &srcMgr) : _srcMgr(srcMgr), _context(), _builder(_context),
-                                                                          _module(mod) {
-            _module->Mod = new llvm::Module(mod->GetName(), _context);
+        explicit CodeGen(std::string parentDir, std::string fileName, llvm::SourceMgr &mgr, DiagnosticEngine &diag)
+                       : _srcMgr(mgr), _diag(diag), _context(), _builder(_context), _module(std::make_unique<llvm::Module>(fileName, _context)), _parentDir(parentDir) {
             _vars.push({});
         }
 
-        llvm::Module *
-        GetLLVMModule() {
-            return _module->Mod;
+        std::unique_ptr<llvm::Module>
+        GetModule() {
+            return std::move(_module);
         }
 
         void
         DeclareMod(Module *mod);
-
-        void
-        DeclareStatements(std::vector<Stmt *> ast);
-
-        void
-        DeclareRuntimeFunctions();
-
-        void
-        GenerateBodies(Module *mod);
 
         llvm::Value *
         VisitVarDeclStmt(VarDeclStmt *vds);
@@ -133,7 +126,7 @@ namespace marble {
         VisitImportStmt(ImportStmt *is);
 
         llvm::Value *
-        VisitModuleDeclStmt(ModuleDeclStmt *mds);
+        VisitModDeclStmt(ModDeclStmt *mds);
 
         llvm::Value *
         VisitBinaryExpr(BinaryExpr *be);
@@ -172,6 +165,12 @@ namespace marble {
         VisitNewExpr(NewExpr *ne);
 
     private:
+        void
+        declareRuntimeFunctions();
+
+        void
+        createImplicitMain();
+
         llvm::Type *
         getCommonType(llvm::Type *left, llvm::Type *right);
         
@@ -199,25 +198,13 @@ namespace marble {
         llvm::Value *
         castToTrait(llvm::Value *src, llvm::Type *traitType, const std::string &structName);
 
-        llvm::Function *
-        getFunction(std::string name);
+        llvm::Constant *
+        getOrCreateGlobalString(std::string val, std::string name = "");
 
         std::string
-        getMangledName(const std::vector<std::string> &path, const std::string &name) const;
+        getMangledName(std::string name, char sep = '.', Module *mod = nullptr);
 
         std::string
-        getCurrentMangled(const std::string &name) const;
-
-        std::vector<std::string>
-        splitPath(const std::string &path);
-
-        std::string
-        getMangledForPath(const std::string &path);
-
-        std::string
-        getModulePathFromExpr(Expr *expr);
-
-        std::string
-        resolveFullTypeName(const ASTType& type);
+        getMangledName(ASTType type, char sep = '.');
     };
 }
