@@ -94,5 +94,11 @@ namespace marble {
 
         void
         VisitNewExpr(NewExpr *ne);
+
+        void
+        VisitArrAccessingExpr(ArrAccessingExpr *aae);
+
+        void
+        VisitArrInitExpr(ArrInitExpr *aie);
     };
 }

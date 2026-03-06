@@ -1,10 +1,12 @@
-#include "marble/Lexer/Token.h"
+#include <marble/Lexer/Token.h>
 #include <marble/Parser/Parser.h>
 #include <marble/Parser/Precedence.h>
 
 static marble::AccessModifier access;
 
 static llvm::BumpPtrAllocator _allocator;
+
+static marble::Token nameTokenForAsgnStmt = marble::Token(marble::TkUnknown, "", llvm::SMLoc());
 
 namespace marble {
     std::vector<Stmt *>
@@ -179,6 +181,21 @@ namespace marble {
         switch (expr->GetKind()) {
             case NkVarExpr:
                 return parseVarAsgn();
+            case NkArrAccessingExpr:
+                if (auto aae = llvm::cast<ArrAccessingExpr>(expr); aae->GetArrExpr()->GetKind() == NkVarExpr || aae->GetArrExpr()->GetKind() == NkFieldAccessExpr) {
+                    if (aae->GetArrExpr()->GetKind() == NkVarExpr) {
+                        VarAsgnStmt *vas = llvm::cast<VarAsgnStmt>(parseVarAsgn());
+                        vas->SetDepthArrAccessing(aae->GetDepthAccessing());
+                        return vas;
+                    }
+                    else {
+                        Expr *base = nullptr;
+                        FieldAsgnStmt *fas = llvm::cast<FieldAsgnStmt>(parseFieldAsgnStmt(llvm::cast<FieldAccessExpr>(aae->GetArrExpr())->GetObject()));
+                        fas->SetDepthArrAccessing(aae->GetDepthAccessing());
+                        return fas;
+                    }
+                }
+                return nullptr;
             case NkFunCallExpr: {
                 FunCallExpr *fce = llvm::cast<FunCallExpr>(expr);
                 return createNode<FunCallStmt>(fce->GetName(), fce->GetArgs(), access, fce->GetStartLoc(), _curTok.GetLoc());
@@ -223,7 +240,17 @@ namespace marble {
 
     Stmt *
     Parser::parseVarAsgn(unsigned char derefDepth) {
-        Token nameToken = _lastTok;
+        Token nameToken = _lastTok.Is(TkId) ? _lastTok : nameTokenForAsgnStmt;
+        std::vector<Expr *> depthArrAccessing;
+        for (; expect(TkLBracket);) {
+            depthArrAccessing.push_back(parseExpr(PrecLowest));
+            if (!expect(TkRBracket)) {
+                _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
+                    << getRangeFromTok(_curTok)
+                    << "]"
+                    << _curTok.GetText();
+            }
+        }
         if (!isAssignmentOp(_curTok.GetKind())) {
             _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
                 << getRangeFromTok(_curTok)
@@ -237,12 +264,22 @@ namespace marble {
         if (op.GetKind() != TkEq && isAssignmentOp(op.GetKind())) {
             expr = createCompoundAssignmentOp(op, base, expr);
         }
-        return createNode<VarAsgnStmt>(nameToken.GetText(), expr, access, nameToken.GetLoc(), _curTok.GetLoc());
+        return createNode<VarAsgnStmt>(nameToken.GetText(), expr, depthArrAccessing, access, nameToken.GetLoc(), _curTok.GetLoc());
     }
 
     Stmt *
     Parser::parseFieldAsgnStmt(Expr *base) {
-        Token nameToken = _lastTok;
+        Token nameToken = _lastTok.Is(TkId) ? _lastTok : nameTokenForAsgnStmt;
+        std::vector<Expr *> depthArrAccessing;
+        for (; expect(TkLBracket);) {
+            depthArrAccessing.push_back(parseExpr(PrecLowest));
+            if (!expect(TkRBracket)) {
+                _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
+                    << getRangeFromTok(_curTok)
+                    << "]"
+                    << _curTok.GetText();
+            }
+        }
         if (!isAssignmentOp(_curTok.GetKind())) {
             _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
                 << getRangeFromTok(_curTok)
@@ -254,7 +291,7 @@ namespace marble {
         if (op.GetKind() != TkEq && isAssignmentOp(op.GetKind())) {
             expr = createCompoundAssignmentOp(op, createNode<FieldAccessExpr>(base, nameToken.GetText(), nameToken.GetLoc(), op.GetLoc()), expr);
         }
-        return createNode<FieldAsgnStmt>(base, nameToken.GetText(), expr, access, base->GetStartLoc(), _curTok.GetLoc());
+        return createNode<FieldAsgnStmt>(base, nameToken.GetText(), expr, depthArrAccessing, access, base->GetStartLoc(), _curTok.GetLoc());
     }
 
     Stmt *
@@ -566,6 +603,20 @@ namespace marble {
                         if (expect(TkDot)) {
                             return parseChainExpr(expr);
                         }
+                        std::vector<Expr *> depthArrAccessing;
+                        Token start = _curTok;
+                        for (; expect(TkLBracket);) {
+                            depthArrAccessing.push_back(parseExpr(PrecLowest));
+                            if (!expect(TkRBracket)) {
+                                _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
+                                    << getRangeFromTok(_curTok)
+                                    << "]"
+                                    << _curTok.GetText();
+                            }
+                        }
+                        if (!depthArrAccessing.empty()) {
+                            expr = createNode<ArrAccessingExpr>(expr, depthArrAccessing, start.GetLoc(), _curTok.GetLoc());
+                        }
                         return expr;
                     }
                     case TkLBrace: {
@@ -598,18 +649,49 @@ namespace marble {
                             return createNode<StructExpr>(ASTType(ASTTypeKind::Unknown, nameToken.GetText(), false, false), initializer, nameToken.GetLoc(), _curTok.GetLoc());
                         }
                         else {
+                            nameTokenForAsgnStmt = nameToken;
                             Expr *expr = createNode<VarExpr>(nameToken.GetText(), nameToken.GetLoc(), _curTok.GetLoc());
                             if (expect(TkDot)) {
                                 return parseChainExpr(expr);
+                            }
+                            std::vector<Expr *> depthArrAccessing;
+                            Token start = _curTok;
+                            for (; expect(TkLBracket);) {
+                                depthArrAccessing.push_back(parseExpr(PrecLowest));
+                                if (!expect(TkRBracket)) {
+                                    _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
+                                        << getRangeFromTok(_curTok)
+                                        << "]"
+                                        << _curTok.GetText();
+                                }
+                            }
+                            if (!depthArrAccessing.empty()) {
+                                expr = createNode<ArrAccessingExpr>(expr, depthArrAccessing, start.GetLoc(), _curTok.GetLoc());
                             }
                             return expr;
                         }
                     }
                     default: {
                         Token startTok = _lastTok;
+                        nameTokenForAsgnStmt = nameToken;
                         Expr *expr = createNode<VarExpr>(nameToken.GetText(), nameToken.GetLoc(), _curTok.GetLoc());
                         if (expect(TkDot)) {
                             expr = parseChainExpr(expr);
+                        }
+                        std::vector<Expr *> depthArrAccessing;
+                        Token start = _curTok;
+                        for (; expect(TkLBracket);) {
+                            depthArrAccessing.push_back(parseExpr(PrecLowest));
+                            if (!expect(TkRBracket)) {
+                                _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
+                                    << getRangeFromTok(_curTok)
+                                    << "]"
+                                    << _curTok.GetText();
+                            }
+                        }
+                        if (!depthArrAccessing.empty()) {
+                            expr = createNode<ArrAccessingExpr>(expr, depthArrAccessing, start.GetLoc(), _curTok.GetLoc());
+                            return expr;
                         }
                         if (_curTok.Is(TkLBrace)) {
                             if (allowStruct) {
@@ -644,8 +726,8 @@ namespace marble {
                                         }
                                     }
                                 }
-                                return createNode<StructExpr>(ASTType(ASTTypeKind::Unknown, structName, false, false, nullptr, path), initializer, nameToken.GetLoc(),
-                                                              _curTok.GetLoc());
+                                return createNode<StructExpr>(ASTType(ASTTypeKind::Unknown, structName, false, false, nullptr, nullptr, nullptr, path), initializer,
+                                                              nameToken.GetLoc(), _curTok.GetLoc());
                             }
                         }
                         return expr;
@@ -704,16 +786,70 @@ namespace marble {
             }
             case TkNew: {
                 Token newTok = consume();
-                ASTType type;
+                Token nameToken = _curTok;
+                ASTType type = consumeType();
                 StructExpr *se = nullptr;
-                if (_curTok.GetKind() == TkId && _nextTok.GetKind() == TkLBrace) {
-                    se = llvm::cast<StructExpr>(parsePrefixExpr());
-                    type = ASTType(ASTTypeKind::Unknown, se->GetType().GetVal(), false, 0);
+                ArrInitExpr *arrInit = nullptr;
+                if (type.GetTypeKind() != ASTTypeKind::Array && expect(TkLBrace)) {
+                    std::vector<std::pair<std::string, Expr *>> initializer;
+                    while (!expect(TkRBrace)) {
+                        std::string name = _curTok.GetText();
+                        if (!expect(TkId)) {
+                            _diag.Report(_curTok.GetLoc(), ErrExpectedId)
+                                << getRangeFromTok(_curTok)
+                                << _curTok.GetText();
+                        }
+                        if (!expect(TkColon)) {
+                            _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
+                                << getRangeFromTok(_curTok)
+                                << ":"                  // expected
+                                << _curTok.GetText();   // got
+                        }
+                        initializer.push_back({ name, parseExpr(PrecLowest) });
+                        if (!_curTok.Is(TkRBrace)) {
+                            if (!expect(TkComma)) {
+                                _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
+                                    << getRangeFromTok(_curTok)
+                                    << ","                  // expected
+                                    << _curTok.GetText();   // got
+                            }
+                        }
+                    }
+                    se = createNode<StructExpr>(type, initializer, nameToken.GetLoc(), _curTok.GetLoc());
                 }
-                else {
-                    type = consumeType();
+                else if (type.GetTypeKind() == ASTTypeKind::Array && expect(TkLBracket)) {
+                    Token startTok = _lastTok;
+                    std::vector<Expr *> init;
+                    while (!expect(TkRBracket)) {
+                        init.push_back(parseExpr(PrecLowest));
+                        if (!_curTok.Is(TkRBracket)) {
+                            if (!expect(TkComma)) {
+                                _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
+                                    << getRangeFromTok(_curTok)
+                                    << ","                  // expected
+                                    << _curTok.GetText();   // got
+                            }
+                        }
+                    }
+                    arrInit = createNode<ArrInitExpr>(init, startTok.GetLoc(), _curTok.GetLoc());
                 }
-                return createNode<NewExpr>(type, se, newTok.GetLoc(), _curTok.GetLoc());
+                return createNode<NewExpr>(type, se, arrInit, newTok.GetLoc(), _curTok.GetLoc());
+            }
+            case TkLBracket: {
+                Token startTok = consume();
+                std::vector<Expr *> init;
+                while (!expect(TkRBracket)) {
+                    init.push_back(parseExpr(PrecLowest));
+                    if (!_curTok.Is(TkRBracket)) {
+                        if (!expect(TkComma)) {
+                            _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
+                                << getRangeFromTok(_curTok)
+                                << ","                  // expected
+                                << _curTok.GetText();   // got
+                        }
+                    }
+                }
+                return createNode<ArrInitExpr>(init, startTok.GetLoc(), _curTok.GetLoc());
             }
             default:
                 _diag.Report(_curTok.GetLoc(), ErrExpectedExpr)
@@ -765,9 +901,38 @@ namespace marble {
                 }
             }
             expr = createNode<MethodCallExpr>(base, nameToken.GetText(), args, nameToken.GetLoc(), _curTok.GetLoc());
+            std::vector<Expr *> depthArrAccessing;
+            Token start = _curTok;
+            for (; expect(TkLBracket);) {
+                depthArrAccessing.push_back(parseExpr(PrecLowest));
+                if (!expect(TkRBracket)) {
+                    _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
+                        << getRangeFromTok(_curTok)
+                        << "]"
+                        << _curTok.GetText();
+                }
+            }
+            if (!depthArrAccessing.empty()) {
+                expr = createNode<ArrAccessingExpr>(expr, depthArrAccessing, start.GetLoc(), _curTok.GetLoc());
+            }
         }
         else {
+            nameTokenForAsgnStmt = nameToken;
             expr = createNode<FieldAccessExpr>(base, nameToken.GetText(), nameToken.GetLoc(), _curTok.GetLoc());
+            std::vector<Expr *> depthArrAccessing;
+            Token start = _curTok;
+            for (; expect(TkLBracket);) {
+                depthArrAccessing.push_back(parseExpr(PrecLowest));
+                if (!expect(TkRBracket)) {
+                    _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
+                        << getRangeFromTok(_curTok)
+                        << "]"
+                        << _curTok.GetText();
+                }
+            }
+            if (!depthArrAccessing.empty()) {
+                expr = createNode<ArrAccessingExpr>(expr, depthArrAccessing, start.GetLoc(), _curTok.GetLoc());
+            }
         }
         if (expect(TkDot)) {
             return parseChainExpr(expr);
@@ -827,6 +992,21 @@ namespace marble {
                     return res;
                 }
                 return TYPE(Unknown, type.GetText());
+            }
+            case TkLBracket: {
+                ASTType *base = new ASTType;
+                *base = consumeType();
+                Expr *size = nullptr;
+                if (expect(TkComma)) {
+                    size = parseExpr(PrecLowest);
+                }
+                if (!expect(TkRBracket)) {
+                    _diag.Report(_curTok.GetLoc(), ErrExpectedToken)
+                        << getRangeFromTok(_curTok)
+                        << "]"                  // expected
+                        << _curTok.GetText();   // got
+                }
+                return ASTType(ASTTypeKind::Array, "", isConst, pointerDepth, std::move(base), size);
             }
             default:
                 _diag.Report(type.GetLoc(), ErrExpectedType)

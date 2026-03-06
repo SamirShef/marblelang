@@ -37,6 +37,8 @@ namespace marble {
         NkNewExpr,
         NkDerefExpr,
         NkRefExpr,
+        NkArrAccessingExpr,
+        NkArrInitExpr,
         NkEndExprs,
     };
 

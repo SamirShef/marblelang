@@ -70,6 +70,10 @@ namespace marble {
                     return NODE(VisitRefExpr, RefExpr);
                 case NkNewExpr:
                     return NODE(VisitNewExpr, NewExpr);
+                case NkArrAccessingExpr:
+                    return NODE(VisitArrAccessingExpr, ArrAccessingExpr);
+                case NkArrInitExpr:
+                    return NODE(VisitArrInitExpr, ArrInitExpr);
                 default: {}
             }
             #undef NODE

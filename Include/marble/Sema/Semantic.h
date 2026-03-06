@@ -122,6 +122,12 @@ namespace marble {
         std::optional<ASTVal>
         VisitNewExpr(NewExpr *ne);
 
+        std::optional<ASTVal>
+        VisitArrAccessingExpr(ArrAccessingExpr *aae);
+
+        std::optional<ASTVal>
+        VisitArrInitExpr(ArrInitExpr *aie);
+
     private:
         ASTType
         resolveType(ASTType &type, llvm::SMLoc startLoc, llvm::SMLoc endLoc);

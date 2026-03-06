@@ -45,6 +45,9 @@ main(int argc, char **argv) {
         return 0; 
     }
 
+    // TODO: remove next line
+    return 0;
+
     std::string absoluteFileName = std::filesystem::absolute(fileName);
     std::string parentDir = absoluteFileName.substr(0, absoluteFileName.find_last_of("/\\"));
     marble::SemanticAnalyzer sema(parentDir, srcMgr, diag, root);

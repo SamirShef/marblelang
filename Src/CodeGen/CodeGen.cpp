@@ -392,7 +392,7 @@ namespace marble {
                 if (mod->Variables.count(fas->GetName())) {
                     Module *oldMod = _curMod;
                     _curMod = mod;
-                    VarAsgnStmt *vas = new VarAsgnStmt(fas->GetName(), fas->GetExpr(), fas->GetAccess(), fas->GetStartLoc(), fas->GetEndLoc());
+                    VarAsgnStmt *vas = new VarAsgnStmt(fas->GetName(), fas->GetExpr(), fas->GetDepthArrAccessing(), fas->GetAccess(), fas->GetStartLoc(), fas->GetEndLoc());
                     VisitVarAsgnStmt(vas);
                     delete vas;
                     _curMod = oldMod;
@@ -1156,6 +1156,16 @@ namespace marble {
             _builder.CreateStore(se, ptr);
         }
         return ptr;
+    }
+
+    llvm::Value *
+    CodeGen::VisitArrAccessingExpr(ArrAccessingExpr *aae) {
+        return nullptr; // TODO: create logic
+    }
+
+    llvm::Value *
+    CodeGen::VisitArrInitExpr(ArrInitExpr *aie) {
+        return nullptr; // TODO: create logic
     }
 
     void

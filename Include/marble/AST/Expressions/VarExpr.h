@@ -1,6 +1,6 @@
 #pragma once
 #include <marble/AST/Expr.h>
-#include <llvm/ADT/StringRef.h>
+#include <string>
 
 namespace marble {
     class VarExpr : public Expr {

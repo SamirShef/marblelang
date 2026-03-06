@@ -9,10 +9,15 @@ namespace marble {
             val += "const ";
         }
         for (int pd = _pointerDepth; pd > 0; --pd, val += "*");
-        if (_mod) {
-            val += _mod->ToString() + ".";
+        if (_kind == ASTTypeKind::Array) {
+            val += '[' + _arrBase->ToString() + ']';
         }
-        val += _val;
+        else {
+            if (_mod) {
+                val += _mod->ToString() + ".";
+            }
+            val += _val;
+        }
         return val;
     }
 }

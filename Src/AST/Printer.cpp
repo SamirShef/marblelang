@@ -21,9 +21,15 @@ namespace marble {
         llvm::outs() << std::string(_spaces, ' ');
         llvm::outs() << "(VarAsgnStmt: ";
         for (unsigned char dd = vas->GetDerefDepth(); dd > 0; --dd, llvm::outs() << '*');
-        llvm::outs() << vas->GetName() << " = ";
         int spaces = _spaces;
         _spaces = 0;
+        llvm::outs() << vas->GetName();
+        for (auto a : vas->GetDepthArrAccessing()) {
+            llvm::outs() << '[';
+            Visit(a);
+            llvm::outs() << ']';
+        }
+        llvm::outs() << " = ";
         Visit(vas->GetExpr());
         _spaces = spaces;
         llvm::outs() << ')';
@@ -194,10 +200,16 @@ namespace marble {
     void
     ASTPrinter::VisitFieldAsgnStmt(FieldAsgnStmt *fas) {
         llvm::outs() << std::string(_spaces, ' ');
-        llvm::outs() << "(FieldAsgnStmt: " << fas->GetName() << " from ";
+        llvm::outs() << "(FieldAsgnStmt: ";
         int spaces = _spaces;
         _spaces = 0;
         Visit(fas->GetObject());
+        llvm::outs() << "." << fas->GetName();
+        for (auto a : fas->GetDepthArrAccessing()) {
+            llvm::outs() << '[';
+            Visit(a);
+            llvm::outs() << ']';
+        }
         llvm::outs() << " = ";
         Visit(fas->GetExpr());
         _spaces = spaces;
@@ -233,18 +245,19 @@ namespace marble {
     void
     ASTPrinter::VisitMethodCallStmt(MethodCallStmt *mcs) {
         llvm::outs() << std::string(_spaces, ' ');
-        llvm::outs() << "(MethodCallStmt: " << mcs->GetName() << " (";
+        llvm::outs() << "(MethodCallStmt: ";
+        int spaces = _spaces;
+        _spaces = 0;
+        Visit(mcs->GetObject());
+        llvm::outs() << "." << mcs->GetName() << "(";
         for (int i = 0; i < mcs->GetArgs().size(); ++i) {
             Visit(mcs->GetArgs()[i]);
             if (i < mcs->GetArgs().size() - 1) {
                 llvm::outs() << ", ";
             }
         }
-        llvm::outs() << ") from ";
-        int spaces = _spaces;
-        _spaces = 0;
-        Visit(mcs->GetObject());
         _spaces = spaces;
+        llvm::outs() << "))";
     }
 
     void
@@ -379,30 +392,30 @@ namespace marble {
     void
     ASTPrinter::VisitFieldAccessExpr(FieldAccessExpr *fae) {
         llvm::outs() << std::string(_spaces, ' ');
-        llvm::outs() << "(FieldAccessExpr: " << fae->GetName() << " from ";
+        llvm::outs() << "(FieldAccessExpr: ";
         int spaces = _spaces;
         _spaces = 0;
         Visit(fae->GetObject());
         _spaces = spaces;
-        llvm::outs() << ')';
+        llvm::outs() << "." << fae->GetName() << ")";
     }
 
     void
     ASTPrinter::VisitMethodCallExpr(MethodCallExpr *mce) {
         llvm::outs() << std::string(_spaces, ' ');
-        llvm::outs() << "(MethodCallExpr: " << mce->GetName() << " (";
+        llvm::outs() << "(MethodCallExpr: ";
+        int spaces = _spaces;
+        _spaces = 0;
+        Visit(mce->GetObject());
+        llvm::outs() << "." << mce->GetName() << "(";
         for (int i = 0; i < mce->GetArgs().size(); ++i) {
             Visit(mce->GetArgs()[i]);
             if (i < mce->GetArgs().size() - 1) {
                 llvm::outs() << ", ";
             }
         }
-        llvm::outs() << ") from ";
-        int spaces = _spaces;
-        _spaces = 0;
-        Visit(mce->GetObject());
         _spaces = spaces;
-        llvm::outs() << ')';
+        llvm::outs() << "))";
     }
 
     void
@@ -437,5 +450,35 @@ namespace marble {
     ASTPrinter::VisitNewExpr(NewExpr *ne) {
         llvm::outs() << std::string(_spaces, ' ');
         llvm::outs() << "(NewExpr: " << ne->GetType().ToString() << ')';
+    }
+
+    void
+    ASTPrinter::VisitArrAccessingExpr(ArrAccessingExpr *aae) {
+        llvm::outs() << std::string(_spaces, ' ');
+        int spaces = _spaces;
+        _spaces = 0;
+        Visit(aae->GetArrExpr());
+        _spaces = spaces;
+        for (auto a : aae->GetDepthAccessing()) {
+            llvm::outs() << '[';
+            Visit(a);
+            llvm::outs() << ']';
+        }
+    }
+
+    void
+    ASTPrinter::VisitArrInitExpr(ArrInitExpr *aie) {
+        llvm::outs() << std::string(_spaces, ' ');
+        llvm::outs() << "(ArrInitExpr: [";
+        int spaces = _spaces;
+        _spaces = 0;
+        for (int i = 0; i < aie->GetInit().size(); ++i) {
+            Visit(aie->GetInit()[i]);
+            if (i != aie->GetInit().size() - 1) {
+                llvm::outs() << ", ";
+            }
+        }
+        _spaces = spaces;
+        llvm::outs() << "])";
     }
 }

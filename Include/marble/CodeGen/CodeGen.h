@@ -164,6 +164,12 @@ namespace marble {
         llvm::Value *
         VisitNewExpr(NewExpr *ne);
 
+        llvm::Value *
+        VisitArrAccessingExpr(ArrAccessingExpr *aae);
+
+        llvm::Value *
+        VisitArrInitExpr(ArrInitExpr *aie);
+
     private:
         void
         declareRuntimeFunctions();

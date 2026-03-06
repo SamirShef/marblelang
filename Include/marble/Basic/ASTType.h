@@ -1,4 +1,5 @@
 #pragma once
+#include <marble/AST/Expr.h>
 #include <string>
 
 namespace marble {
@@ -15,6 +16,7 @@ namespace marble {
         Struct,
         Trait,
         Noth,
+        Array,
         Nil,
         Mod,
         Unknown,
@@ -25,18 +27,22 @@ namespace marble {
         std::string _val = "";
         bool _isConst = false;
         unsigned char _pointerDepth = 0;
+        ASTType *_arrBase;
+        Expr *_arrSize;
         Module *_mod = nullptr;
         std::string _fullPath = ""; // path without name of type at the end
 
     public:
         ASTType() = default;
 
-        explicit ASTType(ASTTypeKind kind, std::string val, bool isConst, unsigned char pointerDepth, Module *mod = nullptr, std::string fullPath = "")
-                       : _kind(kind), _val(val), _isConst(isConst), _pointerDepth(pointerDepth), _mod(mod), _fullPath(fullPath) {}
+        explicit ASTType(ASTTypeKind kind, std::string val, bool isConst, unsigned char pointerDepth, ASTType *arrBase = nullptr, Expr *arrSize = nullptr,
+                         Module *mod = nullptr, std::string fullPath = "")
+                       : _kind(kind), _val(val), _isConst(isConst), _pointerDepth(pointerDepth), _arrBase(std::move(arrBase)), _mod(mod), _fullPath(fullPath) {}
 
         bool
         operator==(ASTType &other) {
-            return _kind == other._kind && _val == other._val && _pointerDepth == other._pointerDepth && _mod == other._mod;
+            return _kind == other._kind && _val == other._val && _pointerDepth == other._pointerDepth && _arrBase == other._arrBase && _arrSize == other._arrSize &&
+                   _mod == other._mod;
         }
 
         bool
@@ -82,6 +88,16 @@ namespace marble {
         unsigned char
         GetPointerDepth() const {
             return _pointerDepth;
+        }
+
+        ASTType *
+        GetArrBaseType() const {
+            return _arrBase;
+        }
+
+        Expr *
+        GetArrSize() const {
+            return _arrSize;
         }
 
         Module *

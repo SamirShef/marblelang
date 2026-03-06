@@ -69,7 +69,7 @@ namespace marble {
                         std::optional<ASTVal> val = vds->GetExpr() != nullptr ? Visit(vds->GetExpr()) : ASTVal::GetDefaultByType(vds->GetType());
                         if (vds->GetType().GetTypeKind() == ASTTypeKind::Struct && vds->GetExpr() == nullptr) {
                             Struct *s = vds->GetType().GetModule()->FindStruct(vds->GetType().GetVal());
-                            val = ASTVal(ASTType(ASTTypeKind::Struct, s->Name, vds->IsConst(), 0, vds->GetType().GetModule(), vds->GetType().GetFullPath()),
+                            val = ASTVal(ASTType(ASTTypeKind::Struct, s->Name, vds->IsConst(), 0, nullptr, nullptr, vds->GetType().GetModule(), vds->GetType().GetFullPath()),
                                          ASTValData { .i32Val = 0 }, false, false);
                         }
                         Variable var { .Name = vds->GetName(), .Type = vds->GetType(), .Val = val, .IsConst = vds->IsConst(), .Access = vds->GetAccess() };
@@ -417,7 +417,7 @@ namespace marble {
                 if (!s) {
                     return std::nullopt;
                 }
-                val = ASTVal(ASTType(ASTTypeKind::Struct, s->Name, vds->IsConst(), 0, vds->GetType().GetModule(), vds->GetType().GetFullPath()),
+                val = ASTVal(ASTType(ASTTypeKind::Struct, s->Name, vds->IsConst(), 0, nullptr, nullptr, vds->GetType().GetModule(), vds->GetType().GetFullPath()),
                              ASTValData { .i32Val = 0 }, false, false);
             }
             Variable var { .Name = vds->GetName(), .Type = vds->GetType(), .Val = val, .IsConst = vds->IsConst(), .Access = vds->GetAccess() };
@@ -755,7 +755,7 @@ namespace marble {
             FunDeclStmt *method = llvm::dyn_cast<FunDeclStmt>(stmt);
             _vars.push({});
             if (!method->IsStatic()) {
-                ASTType thisType = ASTType(ASTTypeKind::Struct, s->Name, false, 0, is->GetStructType().GetModule());
+                ASTType thisType = ASTType(ASTTypeKind::Struct, s->Name, false, 0, nullptr, nullptr, is->GetStructType().GetModule());
                 ASTVal thisVal = ASTVal(thisType, ASTValData { .i32Val = 0 }, false, false);
                 _vars.top().emplace("this", Variable { .Name = "this", .Type = thisType, .Val = thisVal, .IsConst = false, .Access = AccessPriv });
             }
@@ -1010,7 +1010,7 @@ namespace marble {
         while (!varsCopy.empty()) {
             if (auto var = varsCopy.top().find(ve->GetName()); var != varsCopy.top().end()) {
                 ASTType type = ASTType(var->second.Type.GetTypeKind(), var->second.Type.GetVal(), var->second.IsConst, var->second.Type.GetPointerDepth(),
-                                       var->second.Type.GetModule(), var->second.Type.GetFullPath());
+                                       nullptr, nullptr, var->second.Type.GetModule(), var->second.Type.GetFullPath());
                 if (var->second.Type.GetTypeKind() == ASTTypeKind::Trait) {
                     return ASTVal(type, ASTValData { .i32Val = 0 }, var->second.Val->IsNil(), var->second.Val->CreatedByNew());
                 }
@@ -1022,7 +1022,7 @@ namespace marble {
             return _curMod->Variables.at(ve->GetName()).Val;
         }
         if (auto type = _curMod->FindStruct(ve->GetName())) {
-            auto val = ASTVal(ASTType(ASTTypeKind::Struct, ve->GetName(), false, 0, type->Parent), ASTValData { .i32Val = 0 }, false, false, true);
+            auto val = ASTVal(ASTType(ASTTypeKind::Struct, ve->GetName(), false, 0, nullptr, nullptr, type->Parent), ASTValData { .i32Val = 0 }, false, false, true);
             return val;
         }
         if (auto mod = _curMod->FindModule(ve->GetName())) {
@@ -1103,7 +1103,7 @@ namespace marble {
                     << s->Name;
             }
         }
-        return ASTVal(ASTType(ASTTypeKind::Struct, s->Name, false, 0, se->GetType().GetModule()), ASTValData { .i32Val = 0 }, false, false);
+        return ASTVal(ASTType(ASTTypeKind::Struct, s->Name, false, 0, nullptr, nullptr, se->GetType().GetModule()), ASTValData { .i32Val = 0 }, false, false);
     }
 
 
@@ -1176,7 +1176,7 @@ namespace marble {
                 return it->second.Val;
             }
             else if (auto it = mod->Structures.find(fae->GetName()); it != mod->Structures.end()) {
-                auto val = ASTVal(ASTType(ASTTypeKind::Struct, fae->GetName(), false, 0, it->second.Parent), ASTValData { .i32Val = 0 }, false, false, true);
+                auto val = ASTVal(ASTType(ASTTypeKind::Struct, fae->GetName(), false, 0, nullptr, nullptr, it->second.Parent), ASTValData { .i32Val = 0 }, false, false, true);
                 val.GetType().SetModule(mod);
                 val.SetModule(mod);
                 return val;
@@ -1397,6 +1397,16 @@ namespace marble {
             return ASTVal(ASTType(ASTTypeKind::I32, "i32", false, 0), ASTValData { .i32Val = 0 }, false, false);
         }
         return ASTVal(ne->GetType().Ref(), ASTValData { .i32Val = 0 }, false, true);
+    }
+
+    std::optional<ASTVal>
+    SemanticAnalyzer::VisitArrAccessingExpr(ArrAccessingExpr *aae) {
+        return std::nullopt; // TODO: create logic
+    }
+
+    std::optional<ASTVal>
+    SemanticAnalyzer::VisitArrInitExpr(ArrInitExpr *aie) {
+        return std::nullopt; // TODO: create logic
     }
 
     ASTType

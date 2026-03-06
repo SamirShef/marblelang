@@ -32,3 +32,5 @@
 #include <marble/AST/Expressions/DerefExpr.h>
 #include <marble/AST/Expressions/RefExpr.h>
 #include <marble/AST/Expressions/NewExpr.h>
+#include <marble/AST/Expressions/ArrAccessingExpr.h>
+#include <marble/AST/Expressions/ArrInitExpr.h>
