@@ -15,6 +15,9 @@
 #include <llvm/Support/Path.h>
 #include <llvm/TargetParser/Host.h>
 
+std::filesystem::path
+getExecutablePath();
+
 int
 main(int argc, char **argv) {
     if (argc < 2) {
@@ -27,6 +30,7 @@ main(int argc, char **argv) {
     llvm::outs().SetUnbuffered();
 
     std::string fileName = marble::InputFilename;
+    marble::ModuleManager::LibsPath = getExecutablePath().string() + "Libs/";
 
     llvm::SourceMgr srcMgr;
     marble::DiagnosticEngine diag(srcMgr);
@@ -141,4 +145,28 @@ main(int argc, char **argv) {
     }
     llvm::outs().flush();   // explicitly flushing the buffer
     return 0;
+}
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#include <limits.h>
+#endif
+
+std::filesystem::path
+getExecutablePath() {
+#ifdef _WIN32
+    wchar_t buffer[MAX_PATH];
+    GetModuleFileNameW(NULL, buffer, MAX_PATH);
+    return std::filesystem::path(buffer).remove_filename();
+#else
+    char buffer[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer) - 1);
+    if (len != -1) {
+        buffer[len] = '\0';
+        return std::filesystem::path(buffer).remove_filename();
+    }
+    return std::filesystem::current_path(); // fallback
+#endif
 }

@@ -13,6 +13,7 @@ namespace marble {
         I64,
         F32,
         F64,
+        String,
         Struct,
         Trait,
         Noth,
@@ -27,8 +28,8 @@ namespace marble {
         std::string _val = "";
         bool _isConst = false;
         unsigned char _pointerDepth = 0;
-        ASTType *_arrBase;
-        Expr *_arrSize;
+        ASTType *_arrBase = nullptr;
+        Expr *_arrSize = nullptr;
         Module *_mod = nullptr;
         std::string _fullPath = ""; // path without name of type at the end
 

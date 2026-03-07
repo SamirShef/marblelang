@@ -734,24 +734,26 @@ namespace marble {
                     }
                 }
             }
-            #define LIT(kind, type_val, field, val) \
+            #define LIT(kind, type_val, val) \
                 createNode<LiteralExpr>(ASTVal(ASTType(ASTTypeKind::kind, type_val, false, 0),                                              \
-                                               ASTValData { .field = (val) }, false, false), consume().GetLoc(),                            \
+                                               ASTValData(val), false, false), consume().GetLoc(),                            \
                                                llvm::SMLoc::getFromPointer(_curTok.GetLoc().getPointer() + _curTok.GetText().size()))
             case TkBoolLit:
-                return LIT(Bool, "bool", boolVal, text == "true");
+                return LIT(Bool, "bool", text == "true");
             case TkCharLit:
-                return LIT(Char, "char", charVal, text[0]);
+                return LIT(Char, "char", text[0]);
             case TkI16Lit:
-                return LIT(I16, "i16", i16Val, static_cast<short>(std::stoi(text)));
+                return LIT(I16, "i16", static_cast<short>(std::stoi(text)));
             case TkI32Lit:
-                return LIT(I32, "i32", i32Val, std::stoi(text));
+                return LIT(I32, "i32", std::stoi(text));
             case TkI64Lit:
-                return LIT(I64, "i64", i64Val, std::stol(text));
+                return LIT(I64, "i64", std::stol(text));
             case TkF32Lit:
-                return LIT(F32, "f32", f32Val, std::stof(text));
+                return LIT(F32, "f32", std::stof(text));
             case TkF64Lit:
-                return LIT(F64, "f64", f64Val, std::stod(text));
+                return LIT(F64, "f64", std::stod(text));
+            case TkStrLit:
+                return LIT(String, "string", text);
             #undef LIT
             case TkMinus:
             case TkBang: {

@@ -1,17 +1,43 @@
 #pragma once
+#include <cstring>
 #include <marble/Basic/ASTType.h>
 
 namespace marble {
     struct Module;
 
     union ASTValData {
-        bool    boolVal;
-        char    charVal;
-        short   i16Val;
-        int     i32Val;
-        long    i64Val;
-        float   f32Val;
-        double  f64Val;
+        bool        boolVal;
+        char        charVal;
+        short       i16Val;
+        int         i32Val;
+        long        i64Val;
+        float       f32Val;
+        double      f64Val;
+        std::string str;
+
+                 ASTValData()                           : i32Val(0) {}
+        explicit ASTValData(bool                val)    : boolVal(val) {}
+        explicit ASTValData(char                val)    : charVal(val) {}
+        explicit ASTValData(short               val)    : i16Val(val) {}
+        explicit ASTValData(int                 val)    : i32Val(val) {}
+        explicit ASTValData(long                val)    : i64Val(val) {}
+        explicit ASTValData(float               val)    : f32Val(val) {}
+        explicit ASTValData(double              val)    : f64Val(val) {}
+        explicit ASTValData(const std::string   &val)   : str(val) {}
+        
+        ASTValData(const ASTValData &other) {
+            std::memcpy(this, &other, sizeof(ASTValData));
+        }
+        
+        ASTValData &
+        operator=(const ASTValData &other) {
+            if (this != &other) {
+                std::memcpy(this, &other, sizeof(ASTValData));
+            }
+            return *this;
+        }
+        
+        ~ASTValData() {}
     };
 
     class ASTVal {

@@ -19,6 +19,8 @@ namespace marble {
                 return TO_STR(f32Val);
             case ASTTypeKind::F64:
                 return TO_STR(f64Val);
+            case ASTTypeKind::String:
+                return _data.str;
             case ASTTypeKind::Noth:
                 return "noth";
             case ASTTypeKind::Struct:
@@ -46,6 +48,7 @@ namespace marble {
                 return _data.f32Val;
             case ASTTypeKind::F64:
                 return _data.f64Val;
+            case ASTTypeKind::String:
             case ASTTypeKind::Noth:
             case ASTTypeKind::Struct:
             case ASTTypeKind::Trait:
@@ -62,19 +65,19 @@ namespace marble {
         if (_type.GetTypeKind() >= ASTTypeKind::Char && _type.GetTypeKind() <= ASTTypeKind::F64 &&
             type.GetTypeKind() >= ASTTypeKind::Char && type.GetTypeKind() <= ASTTypeKind::F64) {
             switch (type.GetTypeKind()) {
-                #define VAL(field, cast_type) ASTVal(type, ASTValData { .field = static_cast<cast_type>(AsDouble()) }, false, false)
+                #define VAL(cast_type) ASTVal(type, ASTValData(static_cast<cast_type>(AsDouble())), false, false)
                 case ASTTypeKind::Char:
-                    return VAL(charVal, char);
+                    return VAL(char);
                 case ASTTypeKind::I16:
-                    return VAL(i16Val, short);
+                    return VAL(short);
                 case ASTTypeKind::I32:
-                    return VAL(i32Val, int);
+                    return VAL(int);
                 case ASTTypeKind::I64:
-                    return VAL(i64Val, long);
+                    return VAL(long);
                 case ASTTypeKind::F32:
-                    return VAL(f32Val, float);
+                    return VAL(float);
                 case ASTTypeKind::F64:
-                    return VAL(f64Val, double);
+                    return VAL(double);
                 default: {}
                 #undef VAL
             }
@@ -85,59 +88,61 @@ namespace marble {
     ASTVal
     ASTVal::GetVal(double val, ASTType type) {
         switch (type.GetTypeKind()) {
-            #define VAL(field, cast_type) ASTVal(type, ASTValData { .field = static_cast<cast_type>(val) }, false, false)
+            #define VAL(cast_type) ASTVal(type, ASTValData(static_cast<cast_type>(val)), false, false)
             case ASTTypeKind::Bool:
-                return VAL(boolVal, bool);
+                return VAL(bool);
             case ASTTypeKind::Char:
-                return VAL(charVal, char);
+                return VAL(char);
             case ASTTypeKind::I16:
-                return VAL(i16Val, short);
+                return VAL(short);
             case ASTTypeKind::I32:
-                return VAL(i32Val, int);
+                return VAL(int);
             case ASTTypeKind::I64:
-                return VAL(i64Val, long);
+                return VAL(long);
             case ASTTypeKind::F32:
-                return VAL(f32Val, float);
+                return VAL(float);
             case ASTTypeKind::F64:
-                return VAL(f64Val, double);
+                return VAL(double);
             case ASTTypeKind::Noth:
-                return ASTVal(type, ASTValData { .i32Val = 0 }, false, false);
+                return ASTVal(type, ASTValData(), false, false);
             case ASTTypeKind::Struct:
             case ASTTypeKind::Trait:
-                return VAL(i32Val, int);
+                return VAL(int);
             case ASTTypeKind::Nil:
-                return ASTVal(type, ASTValData { .i32Val = static_cast<int>(val) }, true, false);
+                return ASTVal(type, ASTValData(static_cast<int>(val)), true, false);
             #undef VAL
         }
     }
 
     ASTVal
     ASTVal::GetDefaultByType(ASTType type) {
-        #define VAL(field) ASTVal(type, ASTValData { .field = 0 }, false, true)
+        #define VAL(type_cast) ASTVal(type, ASTValData(static_cast<type_cast>(0)), false, false)
         if (type.IsPointer()) {
-            return VAL(i32Val);
+            return VAL(int);
         }
         switch (type.GetTypeKind()) {
             case ASTTypeKind::Bool:
-                return VAL(boolVal);
+                return VAL(bool);
             case ASTTypeKind::Char:
-                return VAL(charVal);
+                return VAL(char);
             case ASTTypeKind::I16:
-                return VAL(i16Val);
+                return VAL(short);
             case ASTTypeKind::I32:
-                return VAL(i32Val);
+                return VAL(int);
             case ASTTypeKind::I64:
-                return VAL(i64Val);
+                return VAL(long);
             case ASTTypeKind::F32:
-                return VAL(f32Val);
+                return VAL(float);
             case ASTTypeKind::F64:
-                return VAL(f64Val);
+                return VAL(double);
+            case ASTTypeKind::String:
+                return ASTVal(type, ASTValData(""), false, false);
             case ASTTypeKind::Noth:
             case ASTTypeKind::Struct:
             case ASTTypeKind::Trait:
-                return VAL(i32Val);
+                return VAL(int);
             case ASTTypeKind::Nil:
-                return ASTVal(type, ASTValData { .i32Val = 0 }, true, false);
+                return ASTVal(type, ASTValData(), true, false);
         }
         #undef VAL
     }
