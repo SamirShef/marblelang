@@ -4,7 +4,7 @@ struct Human {
 
 fun main(): i32 {
     var h: *Human = new Human { age: 16 };
-    echo h.age; echo '\n';
+    echo h.age; echo '\n'; // 16
     del h;
     return 0;
 }

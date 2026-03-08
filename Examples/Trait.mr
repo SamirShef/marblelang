@@ -12,14 +12,14 @@ trait TSubtractable {
 
 impl TAddable for Int {
     pub fun Add(other: i32): Int {
-        this = Int { v: this.v + other };
+        this.v += other;
         return this;
     }
 }
 
 impl TSubtractable for Int {
     pub fun Sub(other: i32): Int {
-        this = Int { v: this.v - other };
+        this.v -= other;
         return this;
     }
 }
@@ -38,8 +38,8 @@ impl Int {
 fun main(): i32 {
     var i: Int = Int { v: 2 };
     i.Add(3);
-    i.Print();
+    i.Print(); // 5
     i.Sub(5);
-    i.Print();
+    i.Print(); // 0
     return 0;
 }

@@ -338,10 +338,9 @@ namespace marble {
                             << path + ".mr";
                         continue;
                     }
-                    std::vector<std::string> parts = splitString(is->IsLocalImport() ? normalizePath(is->GetPath()) : path, '/');
-                    int i = is->IsLocalImport() ? 0 : 1;
+                    std::vector<std::string> parts = splitString(is->GetPath(), '/');
                     Module *cur = mod;
-                    for (; i < parts.size() - 1; ++i) {
+                    for (int i = 0; i < parts.size() - 1; ++i) {
                         std::string &name = parts[i];
                         Module *inner = nullptr;
                         if (auto it = cur->Submodules.find(name); it != cur->Submodules.end()) {
